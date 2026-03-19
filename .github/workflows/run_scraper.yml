@@ -33,6 +33,6 @@ jobs:
       env:
         METAL_USER: ${{ secrets.METAL_USER }}
         METAL_PASS: ${{ secrets.METAL_PASS }}
-        EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+        EMAIL_SENDER: ${{ secrets.EMAIL_USER }}
         EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
       run: python scraper.py
