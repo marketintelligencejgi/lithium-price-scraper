@@ -1,16 +1,16 @@
 from selenium.webdriver.chrome.service import Service
-from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
-from datetime import datetime
 import pandas as pd
 import time
 import smtplib
 from email.message import EmailMessage
 import os
 from io import StringIO
+import undetected_chromedriver as uc
+from selenium.webdriver.chrome.options import Options
 
 ###----------------------------------------------------------------------> INICIO <----------------------------------------------------------------------###
 
@@ -18,7 +18,7 @@ user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
 # Configuración optimizada para GitHub Actions
-options = webdriver.ChromeOptions()
+options = Options()
 
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
@@ -31,7 +31,11 @@ options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option("useAutomationExtension", False)
 
 service = Service()
-driver = webdriver.Chrome(service=service, options=options)
+
+driver = uc.Chrome(
+    options=options,
+    headless=True
+)
 
 driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
