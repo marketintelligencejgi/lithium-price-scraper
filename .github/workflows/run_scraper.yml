@@ -1,6 +1,5 @@
 name: run-scraper
 on:
-  workflow_dispatch:
   schedule:
     - cron: '20 5 * * *'
     - cron: '20 5 * * *'
