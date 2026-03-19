@@ -2,7 +2,7 @@ name: run-scraper
 
 on:
   schedule:
-    - cron: '0 11 * * *'
+    - cron: '20 5 * * *'
   workflow_dispatch:
 
 env:
