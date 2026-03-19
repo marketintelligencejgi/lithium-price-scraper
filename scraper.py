@@ -214,7 +214,13 @@ driver.quit()
 
 file_name = "Reporte_Diario.xlsx"
 
-with pd.ExcelWriter(file_name, engine="xlsxwriter") as writer:
+engine = "xlsxwriter"
+try:
+    __import__("xlsxwriter")
+except ImportError:
+    engine = "openpyxl"
+
+with pd.ExcelWriter(file_name, engine=engine) as writer:
 
     df_lithium_carbonate.to_excel(writer, sheet_name="Lithium carbonate", index=False)
 
@@ -252,3 +258,4 @@ msg.add_attachment(
 with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
     smtp.login(sender, password)
     smtp.send_message(msg)
+    
