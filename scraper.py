@@ -219,6 +219,10 @@ wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,".ant-table-content t
 table = driver.find_element(By.CSS_SELECTOR,".ant-table-content table")
 df_rare_earth = pd.read_html(StringIO(table.get_attribute("outerHTML")))[0]
 df_rare_earth['Name'] = df_rare_earth['Name'].str.replace(r'SMM.*$', '', regex=True).str.strip()
+df_rare_earth = df_rare_earth.rename(columns={
+    "Name": "Price_description",
+    "Average": "Avg."
+})
 
 driver.quit()
 
