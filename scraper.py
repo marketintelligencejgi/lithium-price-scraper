@@ -4,8 +4,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.options import Options
 from datetime import datetime
 import pandas as pd
 import time
@@ -18,44 +16,31 @@ import os
 user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
-# =========================
-# CONFIGURACIÓN CHROME (GITHUB)
-# =========================
+# Configuración optimizada para GitHub Actions
+options = webdriver.ChromeOptions()
 
-options = Options()
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
-options.add_argument("--window-size=1920,1080")
-
-# evitar detección selenium
 options.add_argument("--disable-blink-features=AutomationControlled")
+
 options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option("useAutomationExtension", False)
 
-options.add_argument(
-"user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
-)
-
-service = Service(ChromeDriverManager().install())
-
+service = Service()
 driver = webdriver.Chrome(service=service, options=options)
 
-driver.execute_script(
-"Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-)
+driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-wait = WebDriverWait(driver,10)
-
+time.sleep(2)
 driver.get('https://www.metal.com/')
-
-wait.until(EC.presence_of_element_located((By.XPATH,'/html/body/div[2]/main/header')))
+time.sleep(10)
 
 # Sign in
 boton = driver.find_element(By.XPATH, '/html/body/div[2]/main/header/div[2]/div/div/div[2]/div/div[1]')
 boton.click()
 
-input_user = wait.until(EC.presence_of_element_located((By.XPATH,'//*[@id="account"]')))
+input_user = driver.find_element(By.XPATH, '//*[@id="account"]')
 input_pass = driver.find_element(By.XPATH, '//*[@id="password"]')
 boton = driver.find_element(By.XPATH, '//*[@id="action"]/div[1]/div[1]/div/div[1]/form/div[4]/div/div/div/div/button')
 
@@ -65,7 +50,9 @@ boton.click()
 
 del(user, password, input_user, input_pass, boton)
 
-wait.until(EC.presence_of_element_located((By.XPATH,'//div[contains(@class,"PriceWrap")]')))
+time.sleep(10)
+
+wait = WebDriverWait(driver,10)
 
 # =========================
 # FUNCIONES
@@ -79,19 +66,14 @@ def page_not_found(driver):
         return True
 
 def extract_price_data(driver, url):
-
     driver.get(url)
-
-    try:
-        container = WebDriverWait(driver,10).until(
-            EC.presence_of_element_located((By.XPATH,'//div[contains(@class,"__PriceWrap")]'))
-        )
-    except:
-        return None, None
+    time.sleep(3)
 
     if page_not_found(driver):
         return None, None
     
+    container = WebDriverWait(driver,10).until(EC.presence_of_element_located((By.XPATH,'//div[contains(@class,"__PriceWrap")]')))
+
     first_price = container.find_element(By.XPATH,'.//div[contains(@class,"avg")]').text
 
     high = None
@@ -106,6 +88,8 @@ def extract_price_data(driver, url):
         low = container.find_element(By.XPATH,'.//div[contains(@class,"list")]/div[2]/label[2]').text
     except:
         pass
+
+    time.sleep(3)
 
     if low is not None and high is not None:
         price_range = f"{low}-{high}"
@@ -213,20 +197,15 @@ for url in urls_other:
 
 df_other = pd.DataFrame([data_other], columns=cols_other)
 
-del (cols_carbonate, cols_hydroxide, cols_metal, cols_other, data_carbonate, data_hydroxide, data_metal, data_other, price, range_price, url, urls_carbonate, urls_hydroxide, urls_metal, urls_other)
+del (cols_carbonate, cols_hydroxide, cols_metal, cols_other, data_carbonate, data_hydroxide, data_metal, data_other, price, range_price, url, urls_carbonate, urls_hydroxide, urls_metal, urls_other, wait)
 
 # =========================
 # RARE EARTH OXIDES
 # =========================
 
 driver.get("https://www.metal.com/Rare-Earth-Oxides")
-
-table = WebDriverWait(driver,10).until(
-    EC.presence_of_element_located((By.CSS_SELECTOR,".ant-table-content table"))
-)
-
+table = driver.find_element(By.CSS_SELECTOR,".ant-table-content table")
 df_rare_earth = pd.read_html(table.get_attribute("outerHTML"))[0]
-
 df_rare_earth['Name'] = df_rare_earth['Name'].str.replace(r'SMM.*$', '', regex=True).str.strip()
 
 driver.quit()
@@ -247,7 +226,6 @@ with pd.ExcelWriter(file_name, engine="xlsxwriter") as writer:
 
 sender = os.environ["EMAIL_USER"]
 password = os.environ["EMAIL_PASS"]
-
 receiver = "market.intelligence@JGI.be"
 
 msg = EmailMessage()
@@ -272,3 +250,4 @@ msg.add_attachment(
 with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
     smtp.login(sender, password)
     smtp.send_message(msg)
+    
