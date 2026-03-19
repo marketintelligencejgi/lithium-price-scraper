@@ -1,33 +1,40 @@
-name: Lithium Scraper
+name: Run Lithium Scraper
 
 on:
-  schedule:
-    - cron: '0 12 * * *'
-  workflow_dispatch:
+schedule:
+- cron: '0 10 * * *'   # Ejecuta todos los días
+workflow_dispatch:
+
+env:
+FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  run-script:
-    runs-on: ubuntu-latest
+run-script:
+runs-on: ubuntu-latest
 
+```
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v4
+
+  - name: Set up Python
+    uses: actions/setup-python@v5
+    with:
+      python-version: '3.11'
+
+  - name: Install Google Chrome
+    uses: browser-actions/setup-chrome@v1
+
+  - name: Install dependencies
+    run: |
+      pip install -r requirements.txt
+
+  - name: Run scraper
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
-    steps:
-
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - run: pip install -r requirements.txt
-
-      - uses: browser-actions/setup-chrome@v1
-
-      - name: Run scraper
-        env:
-          METAL_USER: ${{ secrets.METAL_USER }}
-          METAL_PASS: ${{ secrets.METAL_PASS }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-        run: python scraper.py
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+      SMM_USER: ${{ secrets.SMM_USER }}
+      SMM_PASS: ${{ secrets.SMM_PASS }}
+    run: |
+      python scraper.py
+```
