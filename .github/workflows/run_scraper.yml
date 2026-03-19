@@ -2,12 +2,13 @@ name: Metal Scraper
 
 on:
   schedule:
-    - cron: '20 5 * * *'   # 00:20 Colombia (UTC-5)
+    - cron: '20 5 * * *'   # 00:20 Colombia
   workflow_dispatch:
 
 jobs:
-  scraper:
+  scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
 
@@ -17,14 +18,18 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
-          pip install selenium pandas lxml openpyxl xlsxwriter beautifulsoup4
+          echo "Installing Python dependencies..."
+          pip install selenium pandas lxml openpyxl xlsxwriter beautifulsoup4 undetected-chromedriver
 
       - name: Install Chrome
         uses: browser-actions/setup-chrome@v1
+
+      - name: Show Chrome version
+        run: google-chrome --version
 
       - name: Run scraper with retry
         env:
@@ -36,14 +41,31 @@ jobs:
 
           echo "Starting scraper..."
 
-          for i in 1 2 3
+          ATTEMPT=1
+          MAX_ATTEMPTS=3
+
+          until [ $ATTEMPT -gt $MAX_ATTEMPTS ]
           do
-            echo "Attempt $i"
+
+            echo "Attempt $ATTEMPT of $MAX_ATTEMPTS"
 
             python scraper.py && break
 
-            echo "Attempt failed. Waiting 60 seconds..."
-            sleep 60
+            echo "Scraper failed..."
+
+            ATTEMPT=$((ATTEMPT+1))
+
+            if [ $ATTEMPT -le $MAX_ATTEMPTS ]; then
+              echo "Retrying in 30 seconds..."
+              sleep 30
+            fi
+
           done
 
-          echo "Workflow finished"
+          if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
+            echo "Scraper failed after $MAX_ATTEMPTS attempts"
+            exit 1
+          fi
+
+      - name: Success log
+        run: echo "Scraper completed successfully"
