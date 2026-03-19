@@ -15,9 +15,6 @@ import subprocess
 import random
 from datetime import datetime
 
-today = datetime.now().strftime("%d/%m/%Y")
-msg["Subject"] = f"Price Tracking Data - {today}"
-
 ###----------------------------------------------------------------------> INICIO <----------------------------------------------------------------------###
 
 user = os.environ["METAL_USER"]
