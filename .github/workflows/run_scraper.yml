@@ -1,4 +1,5 @@
 name: run-scraper
+
 on:
   schedule:
     - cron: '20 5 * * *'
@@ -36,3 +37,5 @@ jobs:
         EMAIL_USER: ${{ secrets.EMAIL_USER }}
         EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
       run: python scraper.py
+
+# daily run
