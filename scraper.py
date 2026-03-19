@@ -200,7 +200,7 @@ for url in urls_other:
 
 df_other = pd.DataFrame([data_other], columns=cols_other)
 
-del (cols_carbonate, cols_hydroxide, cols_metal, cols_other, data_carbonate, data_hydroxide, data_metal, data_other, price, range_price, url, urls_carbonate, urls_hydroxide, urls_metal, urls_other, wait)
+del (cols_carbonate, cols_hydroxide, cols_metal, cols_other, data_carbonate, data_hydroxide, data_metal, data_other, price, range_price, url, urls_carbonate, urls_hydroxide, urls_metal, urls_other)
 
 # =========================
 # RARE EARTH OXIDES
