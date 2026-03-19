@@ -10,6 +10,7 @@ import time
 import smtplib
 from email.message import EmailMessage
 import os
+from io import StringIO
 
 ###----------------------------------------------------------------------> INICIO <----------------------------------------------------------------------###
 
@@ -206,8 +207,9 @@ del (cols_carbonate, cols_hydroxide, cols_metal, cols_other, data_carbonate, dat
 # =========================
 
 driver.get("https://www.metal.com/Rare-Earth-Oxides")
+wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,".ant-table-content table")))
 table = driver.find_element(By.CSS_SELECTOR,".ant-table-content table")
-df_rare_earth = pd.read_html(table.get_attribute("outerHTML"))[0]
+df_rare_earth = pd.read_html(StringIO(table.get_attribute("outerHTML")))[0]
 df_rare_earth['Name'] = df_rare_earth['Name'].str.replace(r'SMM.*$', '', regex=True).str.strip()
 
 driver.quit()
@@ -258,4 +260,3 @@ msg.add_attachment(
 with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
     smtp.login(sender, password)
     smtp.send_message(msg)
-    
