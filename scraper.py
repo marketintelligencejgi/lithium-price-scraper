@@ -13,6 +13,10 @@ import undetected_chromedriver as uc
 from selenium.webdriver.chrome.options import Options
 import subprocess
 import random
+from datetime import datetime
+
+today = datetime.now().strftime("%d/%m/%Y")
+msg["Subject"] = f"Price Tracking Data - {today}"
 
 ###----------------------------------------------------------------------> INICIO <----------------------------------------------------------------------###
 
@@ -247,7 +251,7 @@ receiver = "market.intelligence@JGI.be"
 
 msg = EmailMessage()
 
-msg["Subject"] = "Price Tracking Data"
+msg["Subject"] = f"Price Tracking Data - {datetime.now().strftime('%d/%m/%Y')}"
 msg["From"] = sender
 msg["To"] = receiver
 
