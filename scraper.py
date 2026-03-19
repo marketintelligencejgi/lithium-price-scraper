@@ -230,17 +230,37 @@ try:
 except ImportError:
     engine = "openpyxl"
 
+engine = "xlsxwriter"
+
 with pd.ExcelWriter(file_name, engine=engine) as writer:
 
     df_lithium_carbonate.to_excel(writer, sheet_name="Lithium carbonate", index=False)
-
     df_lithium_hydroxide.to_excel(writer, sheet_name="Lithium hydroxide", index=False)
-
     df_lithium_metal.to_excel(writer, sheet_name="Lithium metal", index=False)
-
     df_other.to_excel(writer, sheet_name="Other", index=False)
-
     df_rare_earth.to_excel(writer, sheet_name="REO", index=False)
+
+    workbook  = writer.book
+
+    dfs = [
+        ("Lithium carbonate", df_lithium_carbonate, "LC_Data"),
+        ("Lithium hydroxide", df_lithium_hydroxide, "LH_Data"),
+        ("Lithium metal", df_lithium_metal, "LM_Data"),
+        ("Other", df_other, "Other_Data"),
+        ("REO", df_rare_earth, "REO_Data"),
+    ]
+
+    for sheet_name, df, table_name in dfs:
+        worksheet = writer.sheets[sheet_name]
+        (rows, cols) = df.shape
+        column_settings = [{"header": col} for col in df.columns]
+        worksheet.add_table(
+            0, 0, rows, cols-1,
+            {
+                "columns": column_settings,
+                "name": table_name
+            }
+        )
 
 sender = os.environ["EMAIL_USER"]
 password = os.environ["EMAIL_PASS"]
