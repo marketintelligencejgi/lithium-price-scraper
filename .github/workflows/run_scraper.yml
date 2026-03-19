@@ -1,8 +1,8 @@
-name: Run Lithium Scraper
+name: run-scraper
 
 on:
   schedule:
-    - cron: '0 10 * * *'
+    - cron: '0 11 * * *'
   workflow_dispatch:
 
 env:
@@ -10,31 +10,29 @@ env:
 
 jobs:
   run-script:
-
     runs-on: ubuntu-latest
 
     steps:
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
-      - name: Install Chrome
-        uses: browser-actions/setup-chrome@v1
+    - name: Install dependencies
+      run: |
+        pip install pandas selenium webdriver-manager lxml html5lib xlsxwriter
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+    - name: Setup Chrome
+      uses: browser-actions/setup-chrome@v1
 
-      - name: Run scraper
-        env:
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          SMM_USER: ${{ secrets.SMM_USER }}
-          SMM_PASS: ${{ secrets.SMM_PASS }}
-        run: |
-          python scraper.py
+    - name: Run scraper
+      env:
+        METAL_USER: ${{ secrets.METAL_USER }}
+        METAL_PASS: ${{ secrets.METAL_PASS }}
+        EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+        EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+      run: python scraper.py
