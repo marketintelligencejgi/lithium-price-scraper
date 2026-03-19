@@ -1,4 +1,4 @@
-name: run-scraper
+name: Metal Scraper
 
 on:
   schedule:
@@ -6,36 +6,44 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-scraper:
+  scraper:
     runs-on: ubuntu-latest
 
     steps:
 
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Install dependencies
-      run: |
-        pip install requests pandas beautifulsoup4 gspread oauth2client
+      - name: Install dependencies
+        run: |
+          pip install selenium pandas lxml openpyxl xlsxwriter beautifulsoup4
 
-    - name: Run scraper with retry
-      run: |
-        echo "Starting scraper..."
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
 
-        for i in {1..3}
-        do
-          echo "Attempt $i..."
+      - name: Run scraper with retry
+        env:
+          METAL_USER: ${{ secrets.METAL_USER }}
+          METAL_PASS: ${{ secrets.METAL_PASS }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: |
 
-          python scraper.py && break
+          echo "Starting scraper..."
 
-          echo "Attempt $i failed. Waiting 60 seconds..."
-          sleep 60
-        done
+          for i in 1 2 3
+          do
+            echo "Attempt $i"
 
-    - name: Finished
-      run: echo "Workflow finished successfully"
+            python scraper.py && break
+
+            echo "Attempt failed. Waiting 60 seconds..."
+            sleep 60
+          done
+
+          echo "Workflow finished"
