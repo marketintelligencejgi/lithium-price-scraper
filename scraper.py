@@ -11,6 +11,8 @@ import os
 from io import StringIO
 import undetected_chromedriver as uc
 from selenium.webdriver.chrome.options import Options
+import subprocess
+import random
 
 ###----------------------------------------------------------------------> INICIO <----------------------------------------------------------------------###
 
@@ -27,18 +29,22 @@ options.add_argument("--disable-blink-features=AutomationControlled")
 
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-service = Service()
+chrome_version = subprocess.check_output(["google-chrome", "--version"]).decode()
+chrome_version = int(chrome_version.split(" ")[2].split(".")[0])
 
 driver = uc.Chrome(
     options=options,
-    headless=True
+    headless=True,
+    version_main=chrome_version
 )
+
+service = Service()
 
 driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
-time.sleep(2)
+time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
-time.sleep(10)
+time.sleep(random.uniform(8, 14))
 
 # Sign in
 boton = driver.find_element(By.XPATH, '/html/body/div[2]/main/header/div[2]/div/div/div[2]/div/div[1]')
@@ -54,7 +60,7 @@ boton.click()
 
 del(user, password, input_user, input_pass, boton)
 
-time.sleep(10)
+time.sleep(random.uniform(8, 14))
 
 wait = WebDriverWait(driver,10)
 
