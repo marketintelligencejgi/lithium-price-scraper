@@ -48,12 +48,12 @@ driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
 # Sign in
-boton = driver.find_element(By.XPATH, '/html/body/div[2]/main/header/div[2]/div/div/div[2]/div/div[1]')
+boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class,'signInButton')]")))
 boton.click()
 
 input_user = driver.find_element(By.XPATH, '//*[@id="account"]')
 input_pass = driver.find_element(By.XPATH, '//*[@id="password"]')
-boton = driver.find_element(By.XPATH, '//*[@id="action"]/div[1]/div[1]/div/div[1]/form/div[4]/div/div/div/div/button')
+boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//div[contains(@class,'loginWrapper modal')]/div[1]/div[4]//button")))
 
 input_user.send_keys(user)
 input_pass.send_keys(password)
