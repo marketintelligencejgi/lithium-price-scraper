@@ -53,8 +53,8 @@ boton.click()
 
 input_user = driver.find_element(By.XPATH, '//*[@id="account"]')
 input_pass = driver.find_element(By.XPATH, '//*[@id="password"]')
-# boton = driver.find_element(By.XPATH, '//*[@id="action"]/div[1]/div[1]/div/div[1]/form/div[4]/div/div/div/div/button')
-boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH,"//div[contains(@class,'loginWrapper') and contains(@class,'modal')]//form/div[4]//button")))
+boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="action"]/div[1]/div[1]/div/div[1]/form/div[4]/div/div/div/div/button')))
+# boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH,"//div[contains(@class,'loginWrapper') and contains(@class,'modal')]//form/div[4]//button")))
 
 input_user.send_keys(user)
 input_pass.send_keys(password)
