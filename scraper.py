@@ -65,3 +65,47 @@ for i, elemento in enumerate(elementos):
         flush=True
     )
 
+print("=== BUSQUEDA CAMPO USUARIO ===", flush=True)
+
+usuarios = driver.find_elements(
+    By.CSS_SELECTOR,
+    "input[autocomplete='username']"
+)
+
+print(
+    f"Campos usuario encontrados: {len(usuarios)}",
+    flush=True
+)
+
+for i, elemento in enumerate(usuarios):
+    print(
+        f"Usuario {i}: "
+        f"tag={elemento.tag_name}, "
+        f"id={elemento.get_attribute('id')}, "
+        f"class={elemento.get_attribute('class')}",
+        flush=True
+    )
+
+print("=== BUSQUEDA PASSWORD ===", flush=True)
+
+passwords = driver.find_elements(
+    By.CSS_SELECTOR,
+    "input[name='password']"
+)
+
+print(
+    f"Campos password encontrados: {len(passwords)}",
+    flush=True
+)
+
+print("=== BUSQUEDA BOTON ===", flush=True)
+
+botones = driver.find_elements(
+    By.CSS_SELECTOR,
+    "button.smm-auth-submit"
+)
+
+print(
+    f"Botones encontrados: {len(botones)}",
+    flush=True
+)
