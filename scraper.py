@@ -47,6 +47,31 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
+try:
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located(
+            (By.CSS_SELECTOR, "input[autocomplete='username']")
+        )
+    )
+    print("Usuario encontrado")
+
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located(
+            (By.NAME, "password")
+        )
+    )
+    print("Password encontrado")
+
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "button.smm-auth-submit")
+        )
+    )
+    print("Botón encontrado")
+
+except Exception as e:
+    print("ERROR:", e)
+
 # Sign in
 boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class,'signInButton')]")))
 boton.click()
