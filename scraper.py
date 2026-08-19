@@ -47,94 +47,39 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
-print("=== ANALISIS DEL DOM ===", flush=True)
-
-resultado = driver.execute_script("""
-    function analizar(root, ruta) {
-
-        let resultado = {
-            encontrado: false,
-            ruta: ruta,
-            shadowRoots: []
-        };
-
-        if (!root.querySelectorAll) {
-            return resultado;
-        }
-
-        // Buscar directamente el modal
-        const modal = root.querySelector('.modalWrapper');
-
-        if (modal) {
-            resultado.encontrado = true;
-            resultado.ruta = ruta + " -> .modalWrapper";
-            return resultado;
-        }
-
-        // Buscar elementos que tengan Shadow DOM
-        const elementos = root.querySelectorAll('*');
-
-        for (let i = 0; i < elementos.length; i++) {
-
-            const elemento = elementos[i];
-
-            if (elemento.shadowRoot) {
-
-                resultado.shadowRoots.push(
-                    elemento.tagName +
-                    " | class=" + elemento.className +
-                    " | id=" + elemento.id
-                );
-
-                const subresultado = analizar(
-                    elemento.shadowRoot,
-                    ruta + " -> SHADOW(" + elemento.tagName + ")"
-                );
-
-                if (subresultado.encontrado) {
-                    return subresultado;
-                }
-
-                resultado.shadowRoots =
-                    resultado.shadowRoots.concat(
-                        subresultado.shadowRoots
-                    );
-            }
-        }
-
-        return resultado;
-    }
-
-    return analizar(document, "DOCUMENT");
-""")
+print("=== VENTANAS ABIERTAS ===", flush=True)
 
 print(
-    f"Modal encontrado: {resultado['encontrado']}",
+    f"Cantidad de ventanas: {len(driver.window_handles)}",
     flush=True
 )
 
-print(
-    f"Ruta: {resultado['ruta']}",
-    flush=True
-)
+for i, handle in enumerate(driver.window_handles):
 
-print(
-    f"Shadow Roots encontrados: {len(resultado['shadowRoots'])}",
-    flush=True
-)
-
-for shadow in resultado["shadowRoots"]:
     print(
-        "Shadow Root: " + shadow,
+        f"Ventana {i}: {handle}",
         flush=True
     )
 
-texto = driver.execute_script("""
-    return document.body.innerText.includes("Welcome to SMM");
-""")
+    driver.switch_to.window(handle)
 
-print(
-    f"'Welcome to SMM' visible en document.body: {texto}",
-    flush=True
-)
+    print(
+        f"URL: {driver.current_url}",
+        flush=True
+    )
+
+    print(
+        f"Título: {driver.title}",
+        flush=True
+    )
+
+    modal = driver.find_elements(
+        By.CSS_SELECTOR,
+        "div.modalWrapper"
+    )
+
+    print(
+        f"Modal encontrado: {len(modal)}",
+        flush=True
+    )
 
