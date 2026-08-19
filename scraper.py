@@ -47,65 +47,26 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
-print("=== BUSQUEDA DIRECTA ===", flush=True)
+print("=== ESPERA DEL CAMPO ===", flush=True)
 
-elementos = driver.find_elements(
-    By.XPATH,
-    "//*[contains(text(), 'Welcome to SMM')]"
-)
+try:
 
-print(
-    f"Elementos con texto Welcome to SMM: {len(elementos)}",
-    flush=True
-)
+    input_user = WebDriverWait(driver, 30).until(
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "input[autocomplete='username']")
+        )
+    )
 
-for i, elemento in enumerate(elementos):
+    print("¡¡¡CAMPO DE USUARIO ENCONTRADO!!!", flush=True)
+
+except Exception as e:
+
     print(
-        f"Elemento {i}: tag={elemento.tag_name}, class={elemento.get_attribute('class')}",
+        f"No se encontró el campo después de 30 segundos: {type(e).__name__}",
         flush=True
     )
 
-print("=== BUSQUEDA CAMPO USUARIO ===", flush=True)
+    driver.save_screenshot("error_usuario_wait.png")
 
-usuarios = driver.find_elements(
-    By.CSS_SELECTOR,
-    "input[autocomplete='username']"
-)
-
-print(
-    f"Campos usuario encontrados: {len(usuarios)}",
-    flush=True
-)
-
-for i, elemento in enumerate(usuarios):
-    print(
-        f"Usuario {i}: "
-        f"tag={elemento.tag_name}, "
-        f"id={elemento.get_attribute('id')}, "
-        f"class={elemento.get_attribute('class')}",
-        flush=True
-    )
-
-print("=== BUSQUEDA PASSWORD ===", flush=True)
-
-passwords = driver.find_elements(
-    By.CSS_SELECTOR,
-    "input[name='password']"
-)
-
-print(
-    f"Campos password encontrados: {len(passwords)}",
-    flush=True
-)
-
-print("=== BUSQUEDA BOTON ===", flush=True)
-
-botones = driver.find_elements(
-    By.CSS_SELECTOR,
-    "button.smm-auth-submit"
-)
-
-print(
-    f"Botones encontrados: {len(botones)}",
-    flush=True
-)
+    raise
+    
