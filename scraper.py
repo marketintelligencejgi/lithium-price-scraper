@@ -52,8 +52,8 @@ boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "/
 boton.click()
 time.sleep(random.uniform(3.5, 6.5))
 
-input_user = driver.find_element(By.XPATH, '//*[@id="account"]')
-input_pass = driver.find_element(By.XPATH, '//*[@id="password"]')
+input_user = driver.find_element(By.XPATH, '//*[@id="_r_3_"]')
+input_pass = driver.find_element(By.XPATH, '//*[@id="_r_5_"]')
 boton = driver.find_element(By.XPATH, '//*[@id="action"]/div[1]/div[1]/div/div[1]/form/div[4]/div/div/div/div/button')
 # boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH,"//div[contains(@class,'loginWrapper') and contains(@class,'modal')]//form/div[4]//button")))
 
