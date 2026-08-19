@@ -53,17 +53,31 @@ boton.click()
 time.sleep(random.uniform(3.5, 6.5))
 
 try:
+    print("Buscando popup de login...", flush=True)
+
     input_user = WebDriverWait(driver, 10).until(
         EC.visibility_of_element_located(
             (By.CSS_SELECTOR, "input[autocomplete='username']")
         )
     )
 
-    print("4. USUARIO ENCONTRADO", flush=True)
+    print("Popup encontrado.", flush=True)
 
 except Exception as e:
-    print("4. USUARIO NO ENCONTRADO", flush=True)
+    print("NO SE ENCONTRÓ EL POPUP", flush=True)
     print(f"Error: {type(e).__name__}: {e}", flush=True)
+
+    # Guardar captura de pantalla
+    driver.save_screenshot("error_login.png")
+    print("Captura guardada: error_login.png", flush=True)
+
+    # Guardar HTML de la página
+    with open("error_login.html", "w", encoding="utf-8") as f:
+        f.write(driver.page_source)
+
+    print("HTML guardado: error_login.html", flush=True)
+
+    raise
     
 input_password = driver.find_element(By.NAME, "password")
 boton = driver.find_element(By.CSS_SELECTOR, "button.smm-auth-submit")
