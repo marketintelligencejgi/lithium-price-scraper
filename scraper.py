@@ -54,12 +54,8 @@ time.sleep(random.uniform(3.5, 6.5))
 
 try:
     print("Buscando popup de login...", flush=True)
-
-    input_user = WebDriverWait(driver, 10).until(
-        EC.visibility_of_element_located(
-            (By.CSS_SELECTOR, "input[autocomplete='username']")
-        )
-    )
+    
+    input_user = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//input[@autocomplete="username"]')))
 
     print("Popup encontrado.", flush=True)
 
