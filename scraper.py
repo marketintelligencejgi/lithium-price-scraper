@@ -47,111 +47,40 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
-print("=== INSPECCION CDP ===", flush=True)
+print("=== ESPERANDO POPUP ===", flush=True)
 
-dom = driver.execute_cdp_cmd(
-    "DOM.getDocument",
-    {
-        "depth": -1,
-        "pierce": True
-    }
-)
+for i in range(20):
 
-def buscar_nodos(node):
-    encontrados = []
+    texto = driver.execute_script("""
+        return document.documentElement.innerHTML.includes("Welcome to SMM");
+    """)
 
-    if node.get("nodeName") == "DIV":
-        attrs = node.get("attributes", [])
+    print(
+        f"Segundo {i}: Welcome to SMM = {texto}",
+        flush=True
+    )
 
-        # attributes viene como:
-        # ["class", "modalWrapper", "id", "..."]
-        attrs_dict = dict(
-            zip(attrs[::2], attrs[1::2])
-        )
+    if texto:
+        break
 
-        if (
-            attrs_dict.get("class") == "modalWrapper"
-            or "modalWrapper" in attrs_dict.get("class", "")
-        ):
-            encontrados.append(node)
+    time.sleep(1)
 
-    for child in node.get("children", []):
-        encontrados.extend(buscar_nodos(child))
-
-    for shadow in node.get("shadowRoots", []):
-        encontrados.extend(buscar_nodos(shadow))
-
-    return encontrados
-
-
-encontrados = buscar_nodos(dom["root"])
+print("=== ESTADO FINAL ===", flush=True)
 
 print(
-    f"modalWrapper encontrados por CDP: {len(encontrados)}",
+    f"URL: {driver.current_url}",
     flush=True
 )
 
-for nodo in encontrados:
-    print(
-        f"NODE encontrado: {nodo.get('nodeName')}",
-        flush=True
-    )
-
-    print(
-        f"BackendNodeId: {nodo.get('backendNodeId')}",
-        flush=True
-    )
-
-print("=== BUSCANDO ELEMENTOS DEL LOGIN ===", flush=True)
-
-def buscar_login(node):
-    encontrados = []
-
-    node_name = node.get("nodeName", "")
-    attrs = node.get("attributes", [])
-
-    attrs_dict = dict(
-        zip(attrs[::2], attrs[1::2])
-    )
-
-    clase = attrs_dict.get("class", "")
-    autocomplete = attrs_dict.get("autocomplete", "")
-    tipo = attrs_dict.get("type", "")
-    nombre = attrs_dict.get("name", "")
-
-    if (
-        autocomplete == "username"
-        or nombre == "password"
-        or "smm-auth-submit" in clase
-    ):
-        encontrados.append({
-            "nodeName": node_name,
-            "class": clase,
-            "autocomplete": autocomplete,
-            "type": tipo,
-            "name": nombre,
-            "backendNodeId": node.get("backendNodeId")
-        })
-
-    for child in node.get("children", []):
-        encontrados.extend(buscar_login(child))
-
-    for shadow in node.get("shadowRoots", []):
-        encontrados.extend(buscar_login(shadow))
-
-    return encontrados
-
-
-login_nodes = buscar_login(dom["root"])
-
 print(
-    f"Elementos de login encontrados por CDP: {len(login_nodes)}",
+    f"HTML length: {len(driver.page_source)}",
     flush=True
 )
 
-for nodo in login_nodes:
-    print(
-        nodo,
-        flush=True
-    )
+print(
+    f"Welcome to SMM en page_source: {'Welcome to SMM' in driver.page_source}",
+    flush=True
+)
+
+driver.save_screenshot("debug_popup_final.png")
 
