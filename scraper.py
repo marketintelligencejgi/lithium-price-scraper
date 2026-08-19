@@ -47,91 +47,62 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
-print("=== BUSCANDO PASSWORD EN EL DOM VISIBLE ===", flush=True)
+print("=== INSPECCIONANDO ROLE=DIALOG ===", flush=True)
 
-resultado = driver.execute_script("""
-    const elementos = document.querySelectorAll('*');
-    const encontrados = [];
-
-    for (const elemento of elementos) {
-
-        const texto = (elemento.innerText || '').trim();
-
-        if (
-            elemento.offsetParent !== null &&
-            texto.includes('Password')
-        ) {
-            encontrados.push({
-                tag: elemento.tagName,
-                id: elemento.id,
-                class: elemento.className,
-                texto: texto.substring(0, 200)
-            });
-        }
-    }
-
-    return encontrados;
-""")
-
-print(
-    f"Elementos visibles que contienen Password: {len(resultado)}",
-    flush=True
-)
-
-for elemento in resultado:
-    print(elemento, flush=True)
-
-print("=== BUSCANDO WELCOME EN EL DOM VISIBLE ===", flush=True)
-
-resultado = driver.execute_script("""
-    const elementos = document.querySelectorAll('*');
-    const encontrados = [];
-
-    for (const elemento of elementos) {
-
-        const texto = (elemento.innerText || '').trim();
-
-        if (
-            elemento.offsetParent !== null &&
-            texto.includes('Welcome to SMM')
-        ) {
-            encontrados.push({
-                tag: elemento.tagName,
-                id: elemento.id,
-                class: elemento.className,
-                texto: texto.substring(0, 200)
-            });
-        }
-    }
-
-    return encontrados;
-""")
-
-print(
-    f"Elementos visibles que contienen Welcome: {len(resultado)}",
-    flush=True
-)
-
-for elemento in resultado:
-    print(elemento, flush=True)
-
-dialogs = driver.find_elements(
+dialog = driver.find_element(
     By.CSS_SELECTOR,
     "[role='dialog']"
 )
 
 print(
-    f"Elementos role=dialog: {len(dialogs)}",
+    f"Tag: {dialog.tag_name}",
     flush=True
 )
 
-dialogs = driver.find_elements(
-    By.CSS_SELECTOR,
-    "dialog"
+print(
+    f"ID: {dialog.get_attribute('id')}",
+    flush=True
 )
 
 print(
-    f"Elementos <dialog>: {len(dialogs)}",
+    f"Class: {dialog.get_attribute('class')}",
+    flush=True
+)
+
+print(
+    f"HTML del dialog:\n{dialog.get_attribute('outerHTML')[:5000]}",
+    flush=True
+)
+
+print("=== BUSCANDO CAMPOS DENTRO DEL DIALOG ===", flush=True)
+
+usuarios = dialog.find_elements(
+    By.CSS_SELECTOR,
+    "input[autocomplete='username']"
+)
+
+passwords = dialog.find_elements(
+    By.CSS_SELECTOR,
+    "input[name='password']"
+)
+
+botones = dialog.find_elements(
+    By.CSS_SELECTOR,
+    "button.smm-auth-submit"
+)
+
+print(
+    f"Usuarios: {len(usuarios)}",
+    flush=True
+)
+
+print(
+    f"Passwords: {len(passwords)}",
+    flush=True
+)
+
+print(
+    f"Botones: {len(botones)}",
     flush=True
 )
 
