@@ -58,48 +58,47 @@ resultado = driver.execute_script("""
             shadowRoots: []
         };
 
-        // Buscar el modal
-        if (root.querySelector) {
+        if (!root.querySelectorAll) {
+            return resultado;
+        }
 
-            const modal = root.querySelector('.modalWrapper');
+        // Buscar directamente el modal
+        const modal = root.querySelector('.modalWrapper');
 
-            if (modal) {
-                resultado.encontrado = true;
-                resultado.ruta = ruta + " -> .modalWrapper";
-                return resultado;
-            }
+        if (modal) {
+            resultado.encontrado = true;
+            resultado.ruta = ruta + " -> .modalWrapper";
+            return resultado;
+        }
 
-            // Buscar elementos con Shadow Root
-            const elementos = root.querySelectorAll('*');
+        // Buscar elementos que tengan Shadow DOM
+        const elementos = root.querySelectorAll('*');
 
-            for (let i = 0; i < elementos.length; i++) {
+        for (let i = 0; i < elementos.length; i++) {
 
-                const elemento = elementos[i];
+            const elemento = elementos[i];
 
-                if (elemento.shadowRoot) {
+            if (elemento.shadowRoot) {
 
-                    resultado.shadowRoots.push(
-                        elemento.tagName +
-                        " class=" +
-                        elemento.className +
-                        " id=" +
-                        elemento.id
-                    );
+                resultado.shadowRoots.push(
+                    elemento.tagName +
+                    " | class=" + elemento.className +
+                    " | id=" + elemento.id
+                );
 
-                    const subresultado = analizar(
-                        elemento.shadowRoot,
-                        ruta + " -> SHADOW(" + elemento.tagName + ")"
-                    );
+                const subresultado = analizar(
+                    elemento.shadowRoot,
+                    ruta + " -> SHADOW(" + elemento.tagName + ")"
+                );
 
-                    if (subresultado.encontrado) {
-                        return subresultado;
-                    }
-
-                    resultado.shadowRoots =
-                        resultado.shadowRoots.concat(
-                            subresultado.shadowRoots
-                        );
+                if (subresultado.encontrado) {
+                    return subresultado;
                 }
+
+                resultado.shadowRoots =
+                    resultado.shadowRoots.concat(
+                        subresultado.shadowRoots
+                    );
             }
         }
 
@@ -110,22 +109,32 @@ resultado = driver.execute_script("""
 """)
 
 print(
-    f"Modal encontrado: {resultado.encontrado}",
+    f"Modal encontrado: {resultado['encontrado']}",
     flush=True
 )
 
 print(
-    f"Ruta: {resultado.ruta}",
+    f"Ruta: {resultado['ruta']}",
     flush=True
 )
 
 print(
-    f"Shadow Roots encontrados: {resultado.shadowRoots.length}",
+    f"Shadow Roots encontrados: {len(resultado['shadowRoots'])}",
     flush=True
 )
 
-for shadow in resultado.shadowRoots:
+for shadow in resultado["shadowRoots"]:
     print(
         "Shadow Root: " + shadow,
         flush=True
     )
+
+texto = driver.execute_script("""
+    return document.body.innerText.includes("Welcome to SMM");
+""")
+
+print(
+    f"'Welcome to SMM' visible en document.body: {texto}",
+    flush=True
+)
+
