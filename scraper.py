@@ -47,26 +47,91 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
-print("=== ESPERA DEL CAMPO ===", flush=True)
+print("=== BUSCANDO PASSWORD EN EL DOM VISIBLE ===", flush=True)
 
-try:
+resultado = driver.execute_script("""
+    const elementos = document.querySelectorAll('*');
+    const encontrados = [];
 
-    input_user = WebDriverWait(driver, 30).until(
-        EC.presence_of_element_located(
-            (By.CSS_SELECTOR, "input[autocomplete='username']")
-        )
-    )
+    for (const elemento of elementos) {
 
-    print("¡¡¡CAMPO DE USUARIO ENCONTRADO!!!", flush=True)
+        const texto = (elemento.innerText || '').trim();
 
-except Exception as e:
+        if (
+            elemento.offsetParent !== null &&
+            texto.includes('Password')
+        ) {
+            encontrados.push({
+                tag: elemento.tagName,
+                id: elemento.id,
+                class: elemento.className,
+                texto: texto.substring(0, 200)
+            });
+        }
+    }
 
-    print(
-        f"No se encontró el campo después de 30 segundos: {type(e).__name__}",
-        flush=True
-    )
+    return encontrados;
+""")
 
-    driver.save_screenshot("error_usuario_wait.png")
+print(
+    f"Elementos visibles que contienen Password: {len(resultado)}",
+    flush=True
+)
 
-    raise
-    
+for elemento in resultado:
+    print(elemento, flush=True)
+
+print("=== BUSCANDO WELCOME EN EL DOM VISIBLE ===", flush=True)
+
+resultado = driver.execute_script("""
+    const elementos = document.querySelectorAll('*');
+    const encontrados = [];
+
+    for (const elemento of elementos) {
+
+        const texto = (elemento.innerText || '').trim();
+
+        if (
+            elemento.offsetParent !== null &&
+            texto.includes('Welcome to SMM')
+        ) {
+            encontrados.push({
+                tag: elemento.tagName,
+                id: elemento.id,
+                class: elemento.className,
+                texto: texto.substring(0, 200)
+            });
+        }
+    }
+
+    return encontrados;
+""")
+
+print(
+    f"Elementos visibles que contienen Welcome: {len(resultado)}",
+    flush=True
+)
+
+for elemento in resultado:
+    print(elemento, flush=True)
+
+dialogs = driver.find_elements(
+    By.CSS_SELECTOR,
+    "[role='dialog']"
+)
+
+print(
+    f"Elementos role=dialog: {len(dialogs)}",
+    flush=True
+)
+
+dialogs = driver.find_elements(
+    By.CSS_SELECTOR,
+    "dialog"
+)
+
+print(
+    f"Elementos <dialog>: {len(dialogs)}",
+    flush=True
+)
+
