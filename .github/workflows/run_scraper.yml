@@ -67,5 +67,15 @@ jobs:
             exit 1
           fi
 
+      - name: Guardar evidencia del error
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencia-error-login
+          path: |
+            error_login.png
+            error_login.html
+          if-no-files-found: ignore
+      
       - name: Success log
         run: echo "Scraper completed successfully"
