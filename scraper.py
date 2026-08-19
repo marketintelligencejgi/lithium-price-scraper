@@ -47,40 +47,21 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
-print("=== ESPERANDO POPUP ===", flush=True)
+print("=== BUSQUEDA DIRECTA ===", flush=True)
 
-for i in range(20):
+elementos = driver.find_elements(
+    By.XPATH,
+    "//*[contains(text(), 'Welcome to SMM')]"
+)
 
-    texto = driver.execute_script("""
-        return document.documentElement.innerHTML.includes("Welcome to SMM");
-    """)
+print(
+    f"Elementos con texto Welcome to SMM: {len(elementos)}",
+    flush=True
+)
 
+for i, elemento in enumerate(elementos):
     print(
-        f"Segundo {i}: Welcome to SMM = {texto}",
+        f"Elemento {i}: tag={elemento.tag_name}, class={elemento.get_attribute('class')}",
         flush=True
     )
-
-    if texto:
-        break
-
-    time.sleep(1)
-
-print("=== ESTADO FINAL ===", flush=True)
-
-print(
-    f"URL: {driver.current_url}",
-    flush=True
-)
-
-print(
-    f"HTML length: {len(driver.page_source)}",
-    flush=True
-)
-
-print(
-    f"Welcome to SMM en page_source: {'Welcome to SMM' in driver.page_source}",
-    flush=True
-)
-
-driver.save_screenshot("debug_popup_final.png")
 
