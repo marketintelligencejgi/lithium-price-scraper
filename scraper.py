@@ -47,42 +47,85 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
-print("=== BUSCANDO EN IFRAMES ===", flush=True)
+print("=== ANALISIS DEL DOM ===", flush=True)
 
-iframes = driver.find_elements(By.TAG_NAME, "iframe")
+resultado = driver.execute_script("""
+    function analizar(root, ruta) {
 
-print(f"Iframes encontrados: {len(iframes)}", flush=True)
+        let resultado = {
+            encontrado: false,
+            ruta: ruta,
+            shadowRoots: []
+        };
 
-for i, iframe in enumerate(iframes):
+        // Buscar el modal
+        if (root.querySelector) {
 
-    print(f"Entrando al iframe {i}...", flush=True)
+            const modal = root.querySelector('.modalWrapper');
 
-    try:
-        driver.switch_to.frame(iframe)
+            if (modal) {
+                resultado.encontrado = true;
+                resultado.ruta = ruta + " -> .modalWrapper";
+                return resultado;
+            }
 
-        modal = driver.find_elements(
-            By.CSS_SELECTOR,
-            "div.modalWrapper"
-        )
+            // Buscar elementos con Shadow Root
+            const elementos = root.querySelectorAll('*');
 
-        usuario = driver.find_elements(
-            By.CSS_SELECTOR,
-            "input[autocomplete='username']"
-        )
+            for (let i = 0; i < elementos.length; i++) {
 
-        print(
-            f"Iframe {i}: modal={len(modal)}, usuario={len(usuario)}",
-            flush=True
-        )
+                const elemento = elementos[i];
 
-        driver.switch_to.default_content()
+                if (elemento.shadowRoot) {
 
-    except Exception as e:
+                    resultado.shadowRoots.push(
+                        elemento.tagName +
+                        " class=" +
+                        elemento.className +
+                        " id=" +
+                        elemento.id
+                    );
 
-        print(
-            f"Error en iframe {i}: {type(e).__name__}: {e}",
-            flush=True
-        )
+                    const subresultado = analizar(
+                        elemento.shadowRoot,
+                        ruta + " -> SHADOW(" + elemento.tagName + ")"
+                    );
 
-        driver.switch_to.default_content()
+                    if (subresultado.encontrado) {
+                        return subresultado;
+                    }
 
+                    resultado.shadowRoots =
+                        resultado.shadowRoots.concat(
+                            subresultado.shadowRoots
+                        );
+                }
+            }
+        }
+
+        return resultado;
+    }
+
+    return analizar(document, "DOCUMENT");
+""")
+
+print(
+    f"Modal encontrado: {resultado.encontrado}",
+    flush=True
+)
+
+print(
+    f"Ruta: {resultado.ruta}",
+    flush=True
+)
+
+print(
+    f"Shadow Roots encontrados: {resultado.shadowRoots.length}",
+    flush=True
+)
+
+for shadow in resultado.shadowRoots:
+    print(
+        "Shadow Root: " + shadow,
+        flush=True
+    )
