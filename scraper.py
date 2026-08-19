@@ -47,12 +47,51 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
+print("Buscando modal...", flush=True)
+
+modal = driver.find_elements(
+    By.CSS_SELECTOR,
+    "div.modalWrapper"
+)
+
+print(f"Modales encontrados: {len(modal)}", flush=True)
+
+if modal:
+    print("MODAL ENCONTRADO", flush=True)
+else:
+    print("MODAL NO ENCONTRADO", flush=True)
+
+print("Buscando usuario dentro del modal...", flush=True)
+
+usuario = driver.find_elements(
+    By.CSS_SELECTOR,
+    "div.modalWrapper input[autocomplete='username']"
+)
+
+print(f"Usuarios encontrados: {len(usuario)}", flush=True)
+
 # Sign in
 boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class,'signInButton')]")))
 boton.click()
 time.sleep(random.uniform(3.5, 6.5))
 
-input_user = driver.find_element(By.CSS_SELECTOR,"div.modalWrapper input[autocomplete='username']")
+print("Buscando usuario...", flush=True)
+
+elementos = driver.find_elements(
+    By.CSS_SELECTOR,
+    "div.modalWrapper input[autocomplete='username']"
+)
+
+print(f"Usuarios encontrados: {len(elementos)}", flush=True)
+
+if elementos:
+    print("USUARIO ENCONTRADO", flush=True)
+    input_user = elementos[0]
+else:
+    print("USUARIO NO ENCONTRADO", flush=True)
+    driver.save_screenshot("error_login.png")
+    raise Exception("No se encontró el campo de usuario")
+    
 input_password = driver.find_element(By.CSS_SELECTOR,"div.modalWrapper input[name='password']")
 boton = driver.find_element(By.CSS_SELECTOR,"div.modalWrapper button.smm-auth-submit")
 
