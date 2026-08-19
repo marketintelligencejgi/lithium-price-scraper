@@ -47,288 +47,52 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
-print("Buscando modal...", flush=True)
+print("=== BUSCANDO SHADOW DOM ===", flush=True)
 
-modal = driver.find_elements(
-    By.CSS_SELECTOR,
-    "div.modalWrapper"
-)
+resultado = driver.execute_script("""
+    function buscarEnShadow(root) {
 
-print(f"Modales encontrados: {len(modal)}", flush=True)
+        // Buscar directamente en este nivel
+        if (root.querySelector('div.modalWrapper')) {
+            return true;
+        }
 
-if modal:
-    print("MODAL ENCONTRADO", flush=True)
-else:
-    print("MODAL NO ENCONTRADO", flush=True)
+        // Buscar elementos que tengan Shadow DOM
+        const elementos = root.querySelectorAll('*');
 
-print("Buscando usuario dentro del modal...", flush=True)
-
-usuario = driver.find_elements(
-    By.CSS_SELECTOR,
-    "div.modalWrapper input[autocomplete='username']"
-)
-
-print(f"Usuarios encontrados: {len(usuario)}", flush=True)
-
-# Sign in
-boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class,'signInButton')]")))
-boton.click()
-time.sleep(random.uniform(3.5, 6.5))
-
-print("Buscando usuario...", flush=True)
-
-elementos = driver.find_elements(
-    By.CSS_SELECTOR,
-    "div.modalWrapper input[autocomplete='username']"
-)
-
-print(f"Usuarios encontrados: {len(elementos)}", flush=True)
-
-if elementos:
-    print("USUARIO ENCONTRADO", flush=True)
-    input_user = elementos[0]
-else:
-    print("USUARIO NO ENCONTRADO", flush=True)
-    driver.save_screenshot("error_login.png")
-    raise Exception("No se encontró el campo de usuario")
-    
-input_password = driver.find_element(By.CSS_SELECTOR,"div.modalWrapper input[name='password']")
-boton = driver.find_element(By.CSS_SELECTOR,"div.modalWrapper button.smm-auth-submit")
-
-input_user.send_keys(user)
-input_pass.send_keys(password)
-boton.click()
-
-del(user, password, input_user, input_pass, boton)
-
-time.sleep(random.uniform(8, 14))
-
-wait = WebDriverWait(driver,10)
-
-# =========================
-# FUNCIONES
-# =========================
-
-def page_not_found(driver):
-    try:
-        driver.find_element(By.XPATH,'//div[contains(@class,"PriceWrap")]')
-        return False
-    except NoSuchElementException:
-        return True
-
-def extract_price_data(driver, url):
-    driver.get(url)
-    time.sleep(3)
-
-    if page_not_found(driver):
-        return None, None
-    
-    container = WebDriverWait(driver,10).until(EC.presence_of_element_located((By.XPATH,'//div[contains(@class,"__PriceWrap")]')))
-
-    first_price = container.find_element(By.XPATH,'.//div[contains(@class,"avg")]').text
-
-    high = None
-    low = None
-
-    try:
-        high = container.find_element(By.XPATH,'.//div[contains(@class,"list")]/div[1]/label[2]').text
-    except:
-        pass
-
-    try:
-        low = container.find_element(By.XPATH,'.//div[contains(@class,"list")]/div[2]/label[2]').text
-    except:
-        pass
-
-    time.sleep(3)
-
-    if low is not None and high is not None:
-        price_range = f"{low}-{high}"
-    else:
-        price_range = None
-
-    return first_price, price_range
-
-# =========================
-# LITHIUM CARBONATE
-# =========================
-
-urls_carbonate = ["https://www.metal.com/Lithium/201102250059",
-                  "https://www.metal.com/Lithium/202306050001",
-                  "https://www.metal.com/Lithium/202212050001",
-                  "https://www.metal.com/Lithium/201905160001"]
-
-cols_carbonate = ["Battery-Grade Lithium Carbonate Price",
-                  "Battery-Grade Lithium Carbonate Price Range",
-                  "Battery-Grade Lithium Carbonate (CIF China Japan and South Korea) Price",
-                  "Battery-Grade Lithium Carbonate (CIF China Japan and South Korea) Price Range",
-                  "SMM Battery-Grade Lithium Carbonate Index Price",
-                  "SMM Battery-Grade Lithium Carbonate Index Price Range",
-                  "Industrial-Grade Lithium Carbonate Price",
-                  "Industrial-Grade Lithium Carbonate Price Range"]
-
-data_carbonate = []
-
-for url in urls_carbonate:
-    price, range_price = extract_price_data(driver,url)
-    data_carbonate.append(price)
-    data_carbonate.append(range_price)
-
-df_lithium_carbonate = pd.DataFrame([data_carbonate], columns=cols_carbonate)
-
-# =========================
-# LITHIUM HYDROXIDE
-# =========================
-
-urls_hydroxide = ["https://www.metal.com/Lithium/201102250281",
-                  "https://www.metal.com/Lithium/202106020003",
-                  "https://www.metal.com/Lithium/202107020004",
-                  "https://www.metal.com/Lithium/202212140004",
-                  "https://www.metal.com/Lithium/202005200001"]
-
-cols_hydroxide = ["Battery-Grade Lithium Hydroxide (Coarse Particles) Price",
-                  "Battery-Grade Lithium Hydroxide (Coarse Particles) Price Range",
-                  "Battery-Grade Lithium Hydroxide (Micro Powder) Price",
-                  "Battery-Grade Lithium Hydroxide (Micro Powder) Price Range",
-                  "Battery-Grade Lithium Hydroxide (CIF China Japan and South Korea) Price",
-                  "Battery-Grade Lithium Hydroxide (CIF China Japan and South Korea) Price Range",
-                  "SMM Battery-Grade Lithium Hydroxide Index Price",
-                  "SMM Battery-Grade Lithium Hydroxide Index Price Range",
-                  "Industrial-Grade Lithium Hydroxide Price",
-                  "Industrial-Grade Lithium Hydroxide Price Range"]
-
-data_hydroxide = []
-
-for url in urls_hydroxide:
-    price, range_price = extract_price_data(driver,url)
-    data_hydroxide.append(price)
-    data_hydroxide.append(range_price)
-
-df_lithium_hydroxide = pd.DataFrame([data_hydroxide], columns=cols_hydroxide)
-
-# =========================
-# LITHIUM METAL
-# =========================
-
-urls_metal = ["https://www.metal.com/Lithium/202304250001",
-              "https://www.metal.com/Lithium/202304250002"]
-
-cols_metal = ["Industrial-Grade Lithium Metal (Weekly) Price",
-              "Industrial-Grade Lithium Metal (Weekly) Price Range",
-              "Battery-Grade Lithium Metal (Weekly) Price",
-              "Battery-Grade Lithium Metal (Weekly) Price Range"]
-
-data_metal = []
-
-for url in urls_metal:
-    price, range_price = extract_price_data(driver,url)
-    data_metal.append(price)
-    data_metal.append(range_price)
-
-df_lithium_metal = pd.DataFrame([data_metal], columns=cols_metal)
-
-# =========================
-# OTHER CHEMICALS
-# =========================
-
-urls_other = ["https://www.metal.com/Lithium/202110220001",
-              "https://www.metal.com/Lithium/202307040006"]
-
-cols_other = ["LiPF6 (Domestic) Price",
-              "LiPF6 (Domestic) Price Range",
-              "Battery-Grade Lithium Fluoride Price",
-              "Battery-Grade Lithium Fluoride Price Range"]
-
-data_other = []
-
-for url in urls_other:
-    price, range_price = extract_price_data(driver,url)
-    data_other.append(price)
-    data_other.append(range_price)
-
-df_other = pd.DataFrame([data_other], columns=cols_other)
-
-del (cols_carbonate, cols_hydroxide, cols_metal, cols_other, data_carbonate, data_hydroxide, data_metal, data_other, price, range_price, url, urls_carbonate, urls_hydroxide, urls_metal, urls_other)
-
-# =========================
-# RARE EARTH OXIDES
-# =========================
-
-driver.get("https://www.metal.com/Rare-Earth-Oxides")
-wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,".ant-table-content table")))
-table = driver.find_element(By.CSS_SELECTOR,".ant-table-content table")
-df_rare_earth = pd.read_html(StringIO(table.get_attribute("outerHTML")))[0]
-df_rare_earth['Name'] = df_rare_earth['Name'].str.replace(r'SMM.*$', '', regex=True).str.strip()
-df_rare_earth = df_rare_earth.rename(columns={
-    "Name": "Price_description",
-    "Average": "Avg."
-})
-
-driver.quit()
-
-file_name = "Reporte_Diario.xlsx"
-
-engine = "xlsxwriter"
-try:
-    __import__("xlsxwriter")
-except ImportError:
-    engine = "openpyxl"
-
-engine = "xlsxwriter"
-
-with pd.ExcelWriter(file_name, engine=engine) as writer:
-
-    df_lithium_carbonate.to_excel(writer, sheet_name="Lithium carbonate", index=False)
-    df_lithium_hydroxide.to_excel(writer, sheet_name="Lithium hydroxide", index=False)
-    df_lithium_metal.to_excel(writer, sheet_name="Lithium metal", index=False)
-    df_other.to_excel(writer, sheet_name="Other", index=False)
-    df_rare_earth.to_excel(writer, sheet_name="REO", index=False)
-
-    workbook  = writer.book
-
-    dfs = [
-        ("Lithium carbonate", df_lithium_carbonate, "LC_Data"),
-        ("Lithium hydroxide", df_lithium_hydroxide, "LH_Data"),
-        ("Lithium metal", df_lithium_metal, "LM_Data"),
-        ("Other", df_other, "Other_Data"),
-        ("REO", df_rare_earth, "REO_Data"),
-    ]
-
-    for sheet_name, df, table_name in dfs:
-        worksheet = writer.sheets[sheet_name]
-        (rows, cols) = df.shape
-        column_settings = [{"header": col} for col in df.columns]
-        worksheet.add_table(
-            0, 0, rows, cols-1,
-            {
-                "columns": column_settings,
-                "name": table_name
+        for (const elemento of elementos) {
+            if (elemento.shadowRoot) {
+                if (buscarEnShadow(elemento.shadowRoot)) {
+                    return true;
+                }
             }
-        )
+        }
 
-sender = os.environ["EMAIL_USER"]
-password = os.environ["EMAIL_PASS"]
-receiver = "market.intelligence@JGI.be"
+        return false;
+    }
 
-msg = EmailMessage()
+    return buscarEnShadow(document);
+""")
 
-msg["Subject"] = f"Price Tracking Data - {datetime.now().strftime('%d/%m/%Y')}"
-msg["From"] = sender
-msg["To"] = receiver
+print(f"Popup encontrado dentro de Shadow DOM: {resultado}", flush=True)
 
-msg.set_content("Daily report.")
+cantidad_shadow = driver.execute_script("""
+    let cantidad = 0;
 
-with open(file_name, "rb") as f:
-    file_data = f.read()
-    file_name = f.name
+    function contarShadow(root) {
+        const elementos = root.querySelectorAll('*');
 
-msg.add_attachment(
-    file_data,
-    maintype="application",
-    subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    filename=file_name
-)
+        for (const elemento of elementos) {
+            if (elemento.shadowRoot) {
+                cantidad++;
+                contarShadow(elemento.shadowRoot);
+            }
+        }
+    }
 
-with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-    smtp.login(sender, password)
-    smtp.send_message(msg)
+    contarShadow(document);
+    return cantidad;
+""")
+
+print(f"Shadow DOM encontrados: {cantidad_shadow}", flush=True)
+
