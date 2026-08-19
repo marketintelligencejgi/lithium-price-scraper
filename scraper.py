@@ -48,15 +48,25 @@ driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
 # Sign in
-# boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class,'signInButton')]")))
-# boton.click()
-# time.sleep(random.uniform(3.5, 6.5))
+boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class,'signInButton')]")))
+boton.click()
+time.sleep(random.uniform(3.5, 6.5))
 
-input_user = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//input[@autocomplete="username"]')))
+try:
+    input_user = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located(
+            (By.CSS_SELECTOR, "input[autocomplete='username']")
+        )
+    )
+
+    print("4. USUARIO ENCONTRADO", flush=True)
+
+except Exception as e:
+    print("4. USUARIO NO ENCONTRADO", flush=True)
+    print(f"Error: {type(e).__name__}: {e}", flush=True)
+    
 input_password = driver.find_element(By.NAME, "password")
 boton = driver.find_element(By.CSS_SELECTOR, "button.smm-auth-submit")
-
-# boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH,"//div[contains(@class,'loginWrapper') and contains(@class,'modal')]//form/div[4]//button")))
 
 input_user.send_keys(user)
 input_pass.send_keys(password)
