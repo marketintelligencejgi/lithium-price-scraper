@@ -47,52 +47,42 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
-print("=== BUSCANDO SHADOW DOM ===", flush=True)
+print("=== BUSCANDO EN IFRAMES ===", flush=True)
 
-resultado = driver.execute_script("""
-    function buscarEnShadow(root) {
+iframes = driver.find_elements(By.TAG_NAME, "iframe")
 
-        // Buscar directamente en este nivel
-        if (root.querySelector('div.modalWrapper')) {
-            return true;
-        }
+print(f"Iframes encontrados: {len(iframes)}", flush=True)
 
-        // Buscar elementos que tengan Shadow DOM
-        const elementos = root.querySelectorAll('*');
+for i, iframe in enumerate(iframes):
 
-        for (const elemento of elementos) {
-            if (elemento.shadowRoot) {
-                if (buscarEnShadow(elemento.shadowRoot)) {
-                    return true;
-                }
-            }
-        }
+    print(f"Entrando al iframe {i}...", flush=True)
 
-        return false;
-    }
+    try:
+        driver.switch_to.frame(iframe)
 
-    return buscarEnShadow(document);
-""")
+        modal = driver.find_elements(
+            By.CSS_SELECTOR,
+            "div.modalWrapper"
+        )
 
-print(f"Popup encontrado dentro de Shadow DOM: {resultado}", flush=True)
+        usuario = driver.find_elements(
+            By.CSS_SELECTOR,
+            "input[autocomplete='username']"
+        )
 
-cantidad_shadow = driver.execute_script("""
-    let cantidad = 0;
+        print(
+            f"Iframe {i}: modal={len(modal)}, usuario={len(usuario)}",
+            flush=True
+        )
 
-    function contarShadow(root) {
-        const elementos = root.querySelectorAll('*');
+        driver.switch_to.default_content()
 
-        for (const elemento of elementos) {
-            if (elemento.shadowRoot) {
-                cantidad++;
-                contarShadow(elemento.shadowRoot);
-            }
-        }
-    }
+    except Exception as e:
 
-    contarShadow(document);
-    return cantidad;
-""")
+        print(
+            f"Error en iframe {i}: {type(e).__name__}: {e}",
+            flush=True
+        )
 
-print(f"Shadow DOM encontrados: {cantidad_shadow}", flush=True)
+        driver.switch_to.default_content()
 
