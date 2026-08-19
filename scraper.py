@@ -50,6 +50,7 @@ time.sleep(random.uniform(8, 14))
 # Sign in
 boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "//*[contains(@class,'signInButton')]")))
 boton.click()
+boton.click()
 time.sleep(random.uniform(3.5, 6.5))
 
 input_user = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//input[@autocomplete="username"]')))
