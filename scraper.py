@@ -73,92 +73,296 @@ driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
 # Sign in
-# Sign in - Versión mejorada
-# Versión simplificada - probar todos los iframes
-boton_signin = WebDriverWait(driver, 10).until(
-    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
-)
-boton_signin.click()
-time.sleep(5)
+# ============================================
+# LOGIN - VERSIÓN CON JAVASCRIPT PARA FORZAR POPUP
+# ============================================
 
-# Probar todos los iframes
-input_user = None
-driver.switch_to.default_content()
-iframes = driver.find_elements(By.TAG_NAME, "iframe")
-
-for i, iframe in enumerate(iframes):
-    try:
-        driver.switch_to.frame(iframe)
-        print(f"Probando iframe {i}")
-        inputs = driver.find_elements(By.XPATH, "//input")
-        if inputs:
-            print(f"Iframe {i} tiene {len(inputs)} inputs")
-            for inp in inputs:
-                print(f"  type={inp.get_attribute('type')}, placeholder={inp.get_attribute('placeholder')}")
-            # Tomar el primer input visible
-            for inp in inputs:
+try:
+    # Primero, asegurarnos de que la página esté completamente cargada
+    WebDriverWait(driver, 20).until(
+        EC.presence_of_element_located((By.XPATH, "//button[contains(text(), 'Sign In')]"))
+    )
+    print("Página cargada correctamente")
+    
+    # ============================================
+    # MÉTODO 1: Hacer clic con JavaScript
+    # ============================================
+    print("Intentando abrir popup con JavaScript...")
+    driver.execute_script("""
+        // Buscar todos los botones que contengan "Sign In"
+        const buttons = document.querySelectorAll('button');
+        for (let btn of buttons) {
+            if (btn.textContent.includes('Sign In')) {
+                btn.click();
+                break;
+            }
+        }
+    """)
+    print("Clic con JavaScript ejecutado")
+    
+    # Esperar a que el popup se abra
+    time.sleep(5)
+    
+    # ============================================
+    # MÉTODO 2: Buscar el popup directamente en el DOM
+    # ============================================
+    print("Buscando popup en el DOM...")
+    
+    # Buscar cualquier contenedor que pueda ser el popup
+    popup_found = False
+    input_user = None
+    
+    # Buscar por diferentes selectores comunes de modales
+    selectores_modal = [
+        "//div[contains(@class, 'modal')]",
+        "//div[contains(@class, 'ant-modal')]",
+        "//div[contains(@class, 'drawer')]",
+        "//div[contains(@class, 'ant-drawer')]",
+        "//div[contains(@role, 'dialog')]",
+        "//div[contains(@class, 'popup')]",
+        "//div[contains(@class, 'login')]"
+    ]
+    
+    for selector in selectores_modal:
+        try:
+            modales = driver.find_elements(By.XPATH, selector)
+            if modales:
+                print(f"Encontrados {len(modales)} elementos con {selector}")
+                # Verificar si alguno está visible
+                for modal in modales:
+                    if modal.is_displayed():
+                        print(f"¡Popup visible encontrado!")
+                        popup_found = True
+                        
+                        # Buscar inputs dentro del popup
+                        inputs = modal.find_elements(By.XPATH, ".//input")
+                        print(f"Inputs en el popup: {len(inputs)}")
+                        
+                        for inp in inputs:
+                            if inp.is_displayed():
+                                input_type = inp.get_attribute('type')
+                                placeholder = inp.get_attribute('placeholder')
+                                print(f"  Input: type={input_type}, placeholder={placeholder}")
+                                
+                                if input_type == 'email' or (placeholder and 'email' in placeholder.lower()):
+                                    input_user = inp
+                                    print("¡Campo de usuario encontrado!")
+                                    break
+                        
+                        if input_user:
+                            break
+                if input_user:
+                    break
+        except Exception as e:
+            print(f"Error con selector {selector}: {e}")
+    
+    # ============================================
+    # MÉTODO 3: Forzar la visibilidad del popup con JavaScript
+    # ============================================
+    if not input_user:
+        print("Popup no visible, intentando forzar con JavaScript...")
+        
+        driver.execute_script("""
+            // Buscar y mostrar todos los elementos ocultos que puedan ser el login
+            const allElements = document.querySelectorAll('*');
+            for (let elem of allElements) {
+                // Si el elemento contiene texto relacionado con login
+                if (elem.textContent && 
+                    (elem.textContent.includes('Email') || 
+                     elem.textContent.includes('Password') ||
+                     elem.textContent.includes('Sign In'))) {
+                    
+                    // Forzar que sea visible
+                    elem.style.display = 'block';
+                    elem.style.visibility = 'visible';
+                    elem.style.opacity = '1';
+                    
+                    // Si es un contenedor, mostrar también sus hijos
+                    const children = elem.querySelectorAll('*');
+                    for (let child of children) {
+                        child.style.display = 'block';
+                        child.style.visibility = 'visible';
+                        child.style.opacity = '1';
+                    }
+                }
+            }
+        """)
+        print("Forzada visibilidad de elementos de login")
+        time.sleep(3)
+        
+        # Buscar inputs después de forzar visibilidad
+        try:
+            # Buscar todos los inputs de la página
+            all_inputs = driver.find_elements(By.XPATH, "//input[@type='email' or @type='text']")
+            for inp in all_inputs:
                 if inp.is_displayed():
                     input_user = inp
-                    print(f"Campo encontrado en iframe {i}")
+                    print(f"Input encontrado: {inp.get_attribute('placeholder')}")
                     break
-            if input_user:
-                break
-        driver.switch_to.default_content()
-    except:
-        driver.switch_to.default_content()
-
-if input_user:
-    print("¡Campo de usuario encontrado!")
-    # Buscar contraseña en el mismo iframe
-    input_pass = driver.find_element(By.XPATH, "//input[@type='password']")
-    input_user.send_keys(user)
-    input_pass.send_keys(password)
+        except:
+            pass
     
-    # Buscar botón login
-    boton = driver.find_element(By.XPATH, "//button[@type='submit']")
-    boton.click()
-else:
-    print("No se encontró campo de usuario en ningún iframe")
-
-# Debug
-debug_login_page(driver)
-time.sleep(random.uniform(3.5, 6.5))
-
-# Buscar elementos de login con múltiples estrategias
-try:
-    # Primero intentamos con placeholder
-    input_user = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Email']"))
-    )
-except:
-    # Si falla, buscamos por tipo
-    input_user = driver.find_element(By.XPATH, "//input[@type='email']")
-
-try:
-    input_pass = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Password']"))
-    )
-except:
-    input_pass = driver.find_element(By.XPATH, "//input[@type='password']")
-
-# Botón de login
-try:
-    boton = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
-    )
-except:
-    boton = driver.find_element(By.XPATH, "//button[@type='submit']")
-
-input_user.send_keys(user)
-input_pass.send_keys(password)
-boton.click()
-
-input_user.send_keys(user)
-input_pass.send_keys(password)
-boton.click()
-
-del(user, password, input_user, input_pass, boton)
-
+    # ============================================
+    # MÉTODO 4: Navegar directamente a la URL de login
+    # ============================================
+    if not input_user:
+        print("Intentando navegar directamente a la URL de login...")
+        
+        # Intentar diferentes URLs de login comunes
+        urls_login = [
+            "https://www.metal.com/login",
+            "https://www.metal.com/signin",
+            "https://www.metal.com/auth/login",
+            "https://www.metal.com/account/login"
+        ]
+        
+        for url_login in urls_login:
+            try:
+                print(f"Probando: {url_login}")
+                driver.get(url_login)
+                time.sleep(5)
+                
+                # Buscar inputs en esta página
+                inputs = driver.find_elements(By.XPATH, "//input[@type='email' or @type='text']")
+                for inp in inputs:
+                    if inp.is_displayed():
+                        input_user = inp
+                        print(f"¡Input encontrado en {url_login}!")
+                        break
+                
+                if input_user:
+                    break
+            except Exception as e:
+                print(f"Error con {url_login}: {e}")
+    
+    # ============================================
+    # VERIFICAR SI SE ENCONTRÓ EL CAMPO DE USUARIO
+    # ============================================
+    if not input_user:
+        # Guardar información completa de debug
+        print("\n=== DEBUG COMPLETO ===")
+        
+        # Buscar todos los elementos que contengan texto de login
+        elementos_con_texto = driver.find_elements(By.XPATH, "//*[contains(text(), 'Email') or contains(text(), 'Password') or contains(text(), 'Sign In')]")
+        print(f"Elementos con texto de login: {len(elementos_con_texto)}")
+        for elem in elementos_con_texto:
+            try:
+                print(f"  {elem.tag_name}: {elem.text[:50]}...")
+                print(f"    class={elem.get_attribute('class')}")
+                print(f"    id={elem.get_attribute('id')}")
+            except:
+                pass
+        
+        # Guardar HTML completo
+        with open('debug_completo.html', 'w', encoding='utf-8') as f:
+            f.write(driver.page_source)
+        driver.save_screenshot("debug_screenshot.png")
+        
+        raise Exception("No se pudo encontrar el campo de usuario en ninguna parte")
+    
+    # ============================================
+    # ENCONTRAR CONTRASEÑA Y BOTÓN DE LOGIN
+    # ============================================
+    
+    print("\n--- Buscando contraseña y botón ---")
+    
+    # Buscar campo de contraseña
+    input_pass = None
+    try:
+        input_pass = driver.find_element(By.XPATH, "//input[@type='password']")
+        print("Contraseña encontrada por tipo")
+    except:
+        # Buscar por placeholder
+        try:
+            inputs = driver.find_elements(By.XPATH, "//input")
+            for inp in inputs:
+                placeholder = inp.get_attribute('placeholder')
+                if placeholder and ('password' in placeholder.lower() or 'contraseña' in placeholder.lower()):
+                    input_pass = inp
+                    print("Contraseña encontrada por placeholder")
+                    break
+        except:
+            pass
+    
+    if not input_pass:
+        raise Exception("No se pudo encontrar el campo de contraseña")
+    
+    # Buscar botón de login
+    boton_login = None
+    try:
+        boton_login = driver.find_element(By.XPATH, "//button[@type='submit']")
+        print("Botón encontrado por tipo submit")
+    except:
+        try:
+            botones = driver.find_elements(By.XPATH, "//button[contains(text(), 'Sign In')]")
+            for btn in botones:
+                if btn.is_displayed():
+                    boton_login = btn
+                    print("Botón encontrado por texto")
+                    break
+        except:
+            pass
+    
+    if not boton_login:
+        # Buscar cualquier botón en el formulario
+        try:
+            forms = driver.find_elements(By.XPATH, "//form")
+            for form in forms:
+                botones = form.find_elements(By.XPATH, ".//button")
+                for btn in botones:
+                    if btn.is_displayed():
+                        boton_login = btn
+                        print("Botón encontrado en formulario")
+                        break
+                if boton_login:
+                    break
+        except:
+            pass
+    
+    if not boton_login:
+        raise Exception("No se pudo encontrar el botón de login")
+    
+    # ============================================
+    # INGRESAR CREDENCIALES Y ENVIAR
+    # ============================================
+    
+    # Limpiar y escribir
+    input_user.clear()
+    input_user.send_keys(user)
+    print("Usuario ingresado")
+    
+    input_pass.clear()
+    input_pass.send_keys(password)
+    print("Contraseña ingresada")
+    
+    # Hacer clic en login
+    boton_login.click()
+    print("Login enviado")
+    
+    # Esperar a que la página cargue
+    time.sleep(random.uniform(5, 8))
+    
+    # Verificar si el login fue exitoso
+    try:
+        # Buscar un elemento que indique que estamos logueados
+        elementos_logout = driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out') or contains(text(), 'Logout')]")
+        if elementos_logout:
+            print("✅ Login exitoso - usuario logueado")
+        else:
+            print("⚠️ No se pudo confirmar login exitoso, continuando...")
+    except:
+        pass
+    
+except Exception as e:
+    print(f"Error en el proceso de login: {str(e)}")
+    try:
+        driver.save_screenshot("error_login_completo.png")
+        with open('error_html_completo.html', 'w', encoding='utf-8') as f:
+            f.write(driver.page_source)
+        print("Archivos de debug guardados")
+    except:
+        pass
+    raise
 time.sleep(random.uniform(8, 14))
 
 wait = WebDriverWait(driver,10)
