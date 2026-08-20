@@ -14,6 +14,7 @@ from selenium.webdriver.chrome.options import Options
 import subprocess
 import random
 from datetime import datetime
+import sys
 
 ###----------------------------------------------------------------------> INICIO <----------------------------------------------------------------------###
 
@@ -23,7 +24,6 @@ password = os.environ["METAL_PASS"]
 # Configuración optimizada para GitHub Actions
 options = Options()
 
-# USAR HEADLESS TRUE PARA PRODUCCIÓN
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
@@ -49,157 +49,81 @@ driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
 # ============================================
-# LOGIN CON SHADOW DOM
+# FUNCIÓN PARA LOGIN USANDO COOKIES
 # ============================================
-print("\n=== INICIANDO LOGIN ===")
-
-try:
-    # 1. Hacer clic en Sign In
-    print("Abriendo popup...")
-    boton_signin = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
-    )
-    driver.execute_script("arguments[0].click();", boton_signin)
-    time.sleep(3)
-    print("✅ Clic en Sign In")
-
-    # 2. Acceder al Shadow DOM directamente con JavaScript
-    print("Accediendo a Shadow DOM...")
+def login_con_cookies(driver, user, password):
+    """
+    Intenta hacer login usando diferentes estrategias
+    """
+    print("\n=== INTENTANDO LOGIN ===")
     
-    # Obtener referencias a los elementos del Shadow DOM
-    elementos = driver.execute_script("""
-        function getShadowElement(hostId, elementSelector) {
-            const host = document.querySelector(hostId);
-            if (!host) return null;
-            
-            // Acceder al Shadow Root
-            const shadowRoot = host.shadowRoot;
-            if (!shadowRoot) return null;
-            
-            // Buscar el elemento dentro del Shadow DOM
-            const element = shadowRoot.querySelector(elementSelector);
-            return element;
-        }
+    # Estrategia 1: Intentar hacer clic en el botón Sign In y llenar el formulario
+    try:
+        print("Estrategia 1: Clic en Sign In...")
+        boton = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
+        )
+        driver.execute_script("arguments[0].click();", boton)
+        time.sleep(3)
+        print("✅ Clic en Sign In")
         
-        // Encontrar el contenedor del Shadow DOM
-        const host = document.querySelector('#smm-auth-widget-root');
-        if (!host) return null;
-        
-        // Acceder al Shadow Root
-        const shadowRoot = host.shadowRoot;
-        if (!shadowRoot) return null;
-        
-        // Buscar los inputs
-        const userInput = shadowRoot.querySelector('#_r_0_');
-        const passInput = shadowRoot.querySelector('#_r_2_');
-        const loginBtn = shadowRoot.querySelector('button.smm-auth-submit');
-        
-        // Verificar si existen y devolverlos
-        return {
-            userExists: !!userInput,
-            passExists: !!passInput,
-            btnExists: !!loginBtn
-        };
-    """)
-    
-    print(f"Elementos en Shadow DOM: {elementos}")
-    
-    if elementos:
-        print("✅ Shadow DOM encontrado")
-        
-        # 3. Ingresar credenciales usando JavaScript
-        print("Ingresando credenciales...")
-        
-        resultado = driver.execute_script(f"""
-            const host = document.querySelector('#smm-auth-widget-root');
-            if (!host) return 'No se encontró el host';
+        # Buscar los campos en el DOM (sin Shadow DOM)
+        try:
+            # Buscar en el DOM principal
+            input_user = driver.find_element(By.ID, "_r_0_")
+            input_pass = driver.find_element(By.ID, "_r_2_")
+            print("✅ Campos encontrados en DOM principal")
             
-            const shadowRoot = host.shadowRoot;
-            if (!shadowRoot) return 'No se encontró el Shadow Root';
+            input_user.send_keys(user)
+            input_pass.send_keys(password)
             
-            // Buscar inputs
-            const userInput = shadowRoot.querySelector('#_r_0_');
-            const passInput = shadowRoot.querySelector('#_r_2_');
-            const loginBtn = shadowRoot.querySelector('button.smm-auth-submit');
+            # Buscar botón de login
+            try:
+                btn_login = driver.find_element(By.XPATH, "//button[contains(@class, 'smm-auth-submit')]")
+                driver.execute_script("arguments[0].click();", btn_login)
+            except:
+                # Intentar con cualquier botón tipo submit
+                btn_login = driver.find_element(By.XPATH, "//button[@type='submit']")
+                driver.execute_script("arguments[0].click();", btn_login)
             
-            if (!userInput || !passInput) return 'No se encontraron los inputs';
-            
-            // Ingresar valores
-            userInput.value = '{user}';
-            passInput.value = '{password}';
-            
-            // Disparar eventos para que React detecte los cambios
-            userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-            userInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-            passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-            passInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-            
-            // Habilitar el botón si está deshabilitado
-            if (loginBtn) {{
-                loginBtn.disabled = false;
-                loginBtn.click();
-                return 'Login enviado';
-            }}
-            
-            return 'Botón no encontrado';
-        """)
-        
-        print(f"Resultado: {resultado}")
-        
-        if "Login enviado" in resultado:
             print("✅ Login enviado")
-        else:
-            print("⚠️ No se pudo enviar el login")
+            time.sleep(5)
             
-    else:
-        print("❌ No se encontró el Shadow DOM")
-        raise Exception("No se pudo acceder al Shadow DOM")
-
-except Exception as e:
-    print(f"❌ Error en login: {e}")
-    # Continuar de todas formas
-
-# Esperar procesamiento del login
-print("Esperando procesamiento...")
-time.sleep(10)
-
-# ============================================
-# VERIFICACIÓN DE LOGIN
-# ============================================
-print("\n=== VERIFICANDO LOGIN ===")
-
-# Ir a la página de precios
-driver.get("https://www.metal.com/Lithium/201102250059")
-time.sleep(8)
-
-# Verificar si hay datos
-page_source = driver.page_source
-
-if "Sign in to view" in page_source:
-    print("❌ Login NO exitoso - La página pide autenticación")
-    print("Intentando método alternativo...")
-    
-    # Método alternativo: Usar JavaScript para buscar y llenar el formulario
-    driver.get("https://www.metal.com/")
-    time.sleep(3)
-    
-    # Usar JavaScript para buscar los campos del popup en toda la página
-    driver.execute_script(f"""
-        // Buscar el botón Sign In y hacer clic
-        const signInBtn = document.querySelector('button.signInButton');
-        if (signInBtn) signInBtn.click();
-        
-        // Esperar a que cargue el popup
-        setTimeout(() => {{
-            // Buscar el contenedor del popup
-            const container = document.querySelector('#smm-auth-widget-root');
-            if (container && container.shadowRoot) {{
-                const shadow = container.shadowRoot;
+            # Verificar login
+            driver.get("https://www.metal.com/")
+            time.sleep(3)
+            
+            # Buscar elementos de usuario logueado
+            if driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out')]"):
+                print("✅ LOGIN EXITOSO (Estrategia 1)")
+                return True
                 
-                // Buscar los inputs
-                const userInput = shadow.querySelector('#_r_0_');
-                const passInput = shadow.querySelector('#_r_2_');
-                const loginBtn = shadow.querySelector('button.smm-auth-submit');
+        except Exception as e:
+            print(f"❌ Error en estrategia 1: {e}")
+            
+    except Exception as e:
+        print(f"❌ Error en estrategia 1: {e}")
+    
+    # Estrategia 2: Intentar con JavaScript directamente
+    try:
+        print("\nEstrategia 2: JavaScript directo...")
+        
+        result = driver.execute_script(f"""
+            // Buscar el botón Sign In
+            const btn = document.querySelector('button.signInButton');
+            if (btn) btn.click();
+            
+            // Esperar y buscar los campos
+            setTimeout(() => {{
+                // Buscar en toda la página
+                const inputs = document.querySelectorAll('input');
+                let userInput = null;
+                let passInput = null;
+                
+                for (let inp of inputs) {{
+                    if (inp.id === '_r_0_') userInput = inp;
+                    if (inp.id === '_r_2_') passInput = inp;
+                }}
                 
                 if (userInput && passInput) {{
                     userInput.value = '{user}';
@@ -209,31 +133,129 @@ if "Sign in to view" in page_source:
                     userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
                     passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
                     
-                    if (loginBtn) {{
-                        loginBtn.disabled = false;
-                        loginBtn.click();
-                        console.log('Login enviado desde método alternativo');
+                    // Buscar y hacer clic en el botón
+                    const submitBtn = document.querySelector('button.smm-auth-submit');
+                    if (submitBtn) {{
+                        submitBtn.disabled = false;
+                        submitBtn.click();
+                        return 'login_enviado';
                     }}
                 }}
-            }}
-        }}, 2000);
-    """)
+                return 'no_encontrado';
+            }}, 2000);
+            
+            return 'ejecutando';
+        """)
+        
+        print(f"Resultado JavaScript: {result}")
+        time.sleep(8)
+        
+        # Verificar login
+        driver.get("https://www.metal.com/")
+        time.sleep(3)
+        
+        if driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out')]"):
+            print("✅ LOGIN EXITOSO (Estrategia 2)")
+            return True
+            
+    except Exception as e:
+        print(f"❌ Error en estrategia 2: {e}")
     
-    time.sleep(5)
+    # Estrategia 3: Usar requests para obtener cookies y luego inyectarlas
+    try:
+        print("\nEstrategia 3: Login con requests...")
+        import requests
+        from bs4 import BeautifulSoup
+        
+        session = requests.Session()
+        
+        # Obtener la página principal
+        response = session.get("https://www.metal.com/")
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Buscar token CSRF si existe
+        csrf_token = None
+        token_input = soup.find('input', {'name': 'csrf_token'})
+        if token_input:
+            csrf_token = token_input.get('value')
+        
+        # Preparar datos de login
+        login_data = {
+            'username': user,
+            'password': password,
+        }
+        if csrf_token:
+            login_data['csrf_token'] = csrf_token
+        
+        # Intentar login
+        login_response = session.post('https://www.metal.com/api/login', data=login_data)
+        
+        if login_response.status_code == 200:
+            print("✅ Login con requests exitoso")
+            
+            # Obtener cookies y agregarlas al driver
+            cookies = session.cookies.get_dict()
+            for name, value in cookies.items():
+                driver.add_cookie({'name': name, 'value': value})
+            
+            # Recargar la página
+            driver.get("https://www.metal.com/")
+            time.sleep(3)
+            
+            if driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out')]"):
+                print("✅ LOGIN EXITOSO (Estrategia 3)")
+                return True
+        else:
+            print(f"❌ Login con requests falló: {login_response.status_code}")
+            
+    except Exception as e:
+        print(f"❌ Error en estrategia 3: {e}")
     
-    # Verificar nuevamente
-    driver.get("https://www.metal.com/Lithium/201102250059")
+    print("❌ TODAS LAS ESTRATEGIAS DE LOGIN FALLARON")
+    return False
+
+# ============================================
+# FUNCIÓN PARA VERIFICAR ACCESO A DATOS
+# ============================================
+def verificar_acceso_datos(driver):
+    """Verifica si se pueden ver los datos de precios"""
+    print("\n=== VERIFICANDO ACCESO A DATOS ===")
+    
+    test_url = "https://www.metal.com/Lithium/201102250059"
+    driver.get(test_url)
     time.sleep(5)
     
     page_source = driver.page_source
+    
     if "Sign in to view" in page_source:
-        print("❌ El login sigue fallando")
-        print("⚠️ El scraping se ejecutará sin autenticación (datos limitados)")
+        print("❌ No se puede acceder a los datos - Pide autenticación")
+        return False
     else:
-        print("✅ Login exitoso con método alternativo")
-        
-else:
-    print("✅ Login exitoso - Se pueden ver los datos")
+        # Verificar si hay datos reales
+        if "Price" in page_source and any(c.isdigit() for c in page_source):
+            print("✅ Se puede acceder a los datos")
+            return True
+        else:
+            print("⚠️ La página no pide login pero no hay datos visibles")
+            return False
+
+# ============================================
+# EJECUTAR LOGIN
+# ============================================
+login_exitoso = login_con_cookies(driver, user, password)
+
+if not login_exitoso:
+    print("\n❌❌❌ LOGIN FALLIDO - DETENIENDO EJECUCIÓN ❌❌❌")
+    driver.quit()
+    sys.exit(1)
+
+# Verificar acceso a datos
+if not verificar_acceso_datos(driver):
+    print("\n❌❌❌ NO SE PUEDE ACCEDER A LOS DATOS - DETENIENDO EJECUCIÓN ❌❌❌")
+    driver.quit()
+    sys.exit(1)
+
+print("\n✅ Login verificado - Continuando con scraping...")
 
 # =========================
 # FUNCIONES DE SCRAPING
@@ -243,20 +265,15 @@ def page_not_found(driver):
     """Verifica si la página existe y tiene datos"""
     try:
         time.sleep(2)
-        
-        # Buscar indicadores de que la página tiene datos
         elementos = driver.find_elements(By.XPATH, '//div[contains(@class, "__PriceWrap")]')
         if elementos:
             return False
-        
         elementos = driver.find_elements(By.XPATH, '//div[contains(@class, "PriceWrap")]')
         if elementos:
             return False
-        
         mensaje_error = driver.find_elements(By.XPATH, '//*[contains(text(), "404") or contains(text(), "Not Found")]')
         if mensaje_error:
             return True
-        
         return True
     except:
         return True
@@ -271,19 +288,11 @@ def extract_price_data(driver, url):
         
         # Verificar si la página pide login
         if "Sign in to view" in driver.page_source:
-            print("  ⚠️ La página pide autenticación")
-            
-            # Intentar recargar después de un momento
-            time.sleep(3)
-            driver.refresh()
-            time.sleep(5)
-            
-            if "Sign in to view" in driver.page_source:
-                print("  ❌ Sigue pidiendo autenticación")
-                return None, None
+            print("  ❌ La página pide autenticación - Login no funcionó")
+            return None, None
         
         if page_not_found(driver):
-            print(f"⚠️ Página no encontrada o sin datos: {url}")
+            print(f"⚠️ Página no encontrada: {url}")
             return None, None
         
         # Buscar contenedor
@@ -461,6 +470,50 @@ df_rare_earth = df_rare_earth.rename(columns={
 })
 
 # ============================================
+# VERIFICAR QUE SE EXTRAJERON DATOS
+# ============================================
+print("\n=== VERIFICANDO DATOS EXTRAÍDOS ===")
+
+# Verificar si hay datos en los DataFrames
+tiene_datos = False
+
+# Verificar Lithium Carbonate
+if not df_lithium_carbonate.empty:
+    # Verificar si hay valores no vacíos (no N/A o vacíos)
+    for col in df_lithium_carbonate.columns:
+        if df_lithium_carbonate[col].notna().any() and (df_lithium_carbonate[col] != "").any():
+            tiene_datos = True
+            break
+
+# Verificar Lithium Hydroxide
+if not tiene_datos and not df_lithium_hydroxide.empty:
+    for col in df_lithium_hydroxide.columns:
+        if df_lithium_hydroxide[col].notna().any() and (df_lithium_hydroxide[col] != "").any():
+            tiene_datos = True
+            break
+
+# Verificar Lithium Metal
+if not tiene_datos and not df_lithium_metal.empty:
+    for col in df_lithium_metal.columns:
+        if df_lithium_metal[col].notna().any() and (df_lithium_metal[col] != "").any():
+            tiene_datos = True
+            break
+
+# Verificar Other
+if not tiene_datos and not df_other.empty:
+    for col in df_other.columns:
+        if df_other[col].notna().any() and (df_other[col] != "").any():
+            tiene_datos = True
+            break
+
+if not tiene_datos:
+    print("\n❌❌❌ NO SE EXTRAJERON DATOS - DETENIENDO EJECUCIÓN ❌❌❌")
+    driver.quit()
+    sys.exit(1)
+
+print("✅ Datos extraídos correctamente")
+
+# ============================================
 # RESULTADOS Y GUARDADO
 # ============================================
 print("\n=== RESUMEN DE DATOS ===")
@@ -512,6 +565,7 @@ with pd.ExcelWriter(file_name, engine=engine) as writer:
 # =========================
 # ENVIAR EMAIL
 # =========================
+print("\n--- Enviando email...")
 sender = os.environ["EMAIL_USER"]
 password_email = os.environ["EMAIL_PASS"]
 receiver = "market.intelligence@JGI.be"
@@ -540,4 +594,4 @@ with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
     smtp.send_message(msg)
 
 driver.quit()
-print("\n✅ Proceso completado exitosamente")
+print("\n✅ Proceso completado exitosamente - Email enviado con datos")
