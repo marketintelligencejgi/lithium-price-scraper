@@ -15,7 +15,7 @@ user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
 async def realizar_login_playwright():
-    """Realiza el login usando Playwright - Versión final"""
+    """Realiza el login usando Playwright - Versión con capturas de pantalla"""
     
     print("\n=== INICIANDO LOGIN CON PLAYWRIGHT ===")
     
@@ -46,9 +46,20 @@ async def realizar_login_playwright():
         page = await context.new_page()
         page.set_default_timeout(60000)
         
+        # ============================================
+        # FUNCIÓN PARA TOMAR SCREENSHOTS
+        # ============================================
+        async def tomar_screenshot(nombre):
+            try:
+                await page.screenshot(path=f"screenshot_{nombre}.png")
+                print(f"📸 Screenshot guardado: screenshot_{nombre}.png")
+            except Exception as e:
+                print(f"⚠️ Error al tomar screenshot {nombre}: {e}")
+        
         print("Cargando página principal...")
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(3000)
+        await tomar_screenshot("01_pagina_principal")
         
         # PASO 1: Hacer clic en Sign In con JavaScript
         print("Buscando botón Sign In...")
@@ -67,11 +78,12 @@ async def realizar_login_playwright():
         """)
         print("✅ Clic en Sign In (JavaScript)")
         await page.wait_for_timeout(3000)
+        await tomar_screenshot("02_despues_clic_signin")
         
         # PASO 2: Forzar la creación del popup si no existe
         print("Verificando popup...")
         
-        await page.evaluate("""
+        popup_creado = await page.evaluate("""
             () => {
                 // Verificar si el popup existe
                 if (!document.querySelector('#smm-auth-widget-root')) {
@@ -120,11 +132,15 @@ async def realizar_login_playwright():
                     container.appendChild(modal);
                     document.body.appendChild(container);
                     console.log('Popup creado manualmente');
+                    return 'creado';
                 }
+                return 'existente';
             }
         """)
         
+        print(f"Popup: {popup_creado}")
         await page.wait_for_timeout(2000)
+        await tomar_screenshot("03_popup_creado")
         
         # PASO 3: Buscar los campos de login
         print("Buscando campos de login...")
@@ -145,6 +161,7 @@ async def realizar_login_playwright():
         await user_input.fill(user)
         await pass_input.fill(password)
         print("✅ Credenciales ingresadas")
+        await tomar_screenshot("04_credenciales_ingresadas")
         
         # PASO 5: Enviar el login con JavaScript (FORZADO)
         print("Enviando login...")
@@ -195,68 +212,94 @@ async def realizar_login_playwright():
         # PASO 6: Esperar a que el login se procese
         print("Esperando procesamiento del login...")
         await page.wait_for_timeout(10000)
+        await tomar_screenshot("05_despues_login")
         
-        # PASO 7: Verificar login
-        print("Verificando login...")
+        # PASO 7: Verificar login en la página principal
+        print("Verificando login en página principal...")
         
         # Recargar la página principal
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(5000)
+        await tomar_screenshot("06_pagina_principal_post_login")
+        
+        # Guardar el HTML de la página principal para debug
+        html_principal = await page.content()
+        with open('pagina_principal_post_login.html', 'w', encoding='utf-8') as f:
+            f.write(html_principal)
+        print("📄 HTML de página principal guardado")
         
         # Verificar si hay elementos de usuario logueado
         page_content = await page.content()
         
-        if "Sign Out" in page_content or "Logout" in page_content:
-            print("✅ LOGIN EXITOSO - Usuario autenticado")
-        else:
-            # Verificar cookies
-            cookies = await context.cookies()
-            session_cookie = None
-            for cookie in cookies:
-                if any(key in cookie.get('name', '').lower() for key in ['session', 'auth', 'token', 'sid']):
-                    session_cookie = cookie
-                    break
-            
-            if session_cookie:
-                print(f"✅ Cookie de sesión encontrada: {session_cookie.get('name')}")
-            else:
-                print("❌ No se encontraron cookies de sesión")
-                await browser.close()
-                return False
+        tiene_signout = "Sign Out" in page_content or "Logout" in page_content
+        print(f"¿Tiene 'Sign Out'? {tiene_signout}")
         
-        # PASO 8: Verificar acceso a datos
+        if tiene_signout:
+            print("✅ LOGIN EXITOSO - Usuario autenticado (según página principal)")
+        else:
+            print("⚠️ No se encontró 'Sign Out' en la página principal")
+        
+        # Verificar cookies
+        cookies = await context.cookies()
+        print(f"\nCookies encontradas: {len(cookies)}")
+        session_cookie = None
+        for cookie in cookies:
+            print(f"  Cookie: {cookie.get('name')} = {cookie.get('value')[:30]}...")
+            if any(key in cookie.get('name', '').lower() for key in ['session', 'auth', 'token', 'sid']):
+                session_cookie = cookie
+                print(f"    ✅ Cookie de sesión encontrada: {cookie.get('name')}")
+        
+        # PASO 8: Verificar acceso a datos con múltiples intentos
         print("\n=== VERIFICANDO ACCESO A DATOS ===")
         
         test_url = "https://www.metal.com/Lithium/201102250059"
-        await page.goto(test_url, wait_until="networkidle")
-        await page.wait_for_timeout(5000)
         
-        page_content = await page.content()
-        
-        if "Sign in to view" in page_content:
-            print("❌ No se puede acceder a los datos - Pide autenticación")
+        # Intentar 3 veces
+        for intento in range(1, 4):
+            print(f"\nIntento {intento} de 3...")
             
-            # Intentar recargar con la sesión
-            print("Recargando con sesión...")
-            await page.goto("https://www.metal.com/", wait_until="networkidle")
-            await page.wait_for_timeout(3000)
-            
-            # Intentar nuevamente
             await page.goto(test_url, wait_until="networkidle")
             await page.wait_for_timeout(5000)
+            await tomar_screenshot(f"07_intento_{intento}_pagina_precios")
+            
             page_content = await page.content()
             
+            # Guardar HTML para debug
+            with open(f'pagina_precios_intento_{intento}.html', 'w', encoding='utf-8') as f:
+                f.write(page_content)
+            print(f"📄 HTML de precios intento {intento} guardado")
+            
             if "Sign in to view" in page_content:
-                print("❌ El login no fue exitoso después de todo")
-                await browser.close()
-                return False
+                print(f"  ❌ Intento {intento}: Pide autenticación")
+                
+                # Intentar recargar con la sesión
+                if intento < 3:
+                    print("  🔄 Recargando página principal para refrescar sesión...")
+                    await page.goto("https://www.metal.com/", wait_until="networkidle")
+                    await page.wait_for_timeout(3000)
+                    await page.goto(test_url, wait_until="networkidle")
+                    await page.wait_for_timeout(3000)
+            else:
+                # Verificar si hay números (precios)
+                numbers = re.findall(r'\d+[,.]?\d*', page_content)
+                if len(numbers) > 10:
+                    print(f"  ✅ Intento {intento}: ACCESO EXITOSO! ({len(numbers)} números encontrados)")
+                    break
+                else:
+                    print(f"  ⚠️ Intento {intento}: No pide login pero hay pocos números ({len(numbers)})")
         
-        # Verificar si hay números (precios)
-        numbers = re.findall(r'\d+[,.]?\d*', page_content)
-        if len(numbers) > 10:
-            print(f"✅ Se puede acceder a los datos ({len(numbers)} números encontrados)")
-        else:
-            print("⚠️ La página no pide login pero hay pocos números")
+        # Verificar el último resultado
+        if "Sign in to view" in page_content:
+            print("\n❌ El login no fue exitoso después de todo")
+            
+            # Mostrar información de cookies
+            print("\n=== COOKIES DETALLADAS ===")
+            cookies = await context.cookies()
+            for cookie in cookies:
+                print(f"  {cookie.get('name')}: {cookie.get('value')[:50]}... (domain: {cookie.get('domain')})")
+            
+            await browser.close()
+            return False
         
         print("\n✅ Login verificado - Continuando con scraping...")
         
