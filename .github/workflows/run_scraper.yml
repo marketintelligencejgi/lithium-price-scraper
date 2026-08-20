@@ -23,13 +23,17 @@ jobs:
       - name: Install dependencies
         run: |
           echo "Installing Python dependencies..."
-          pip install selenium pandas lxml openpyxl xlsxwriter beautifulsoup4 undetected-chromedriver
+          pip install pandas openpyxl xlsxwriter playwright
 
-      - name: Install Chrome
-        uses: browser-actions/setup-chrome@v1
+      - name: Install Playwright browsers
+        run: |
+          echo "Installing Playwright browsers..."
+          playwright install chromium
+          playwright install-deps
 
-      - name: Show Chrome version
-        run: google-chrome --version
+      - name: Show Playwright version
+        run: |
+          python -c "import playwright; print('Playwright version:', playwright.__version__)"
 
       - name: Run scraper with retry
         env:
