@@ -74,232 +74,309 @@ time.sleep(random.uniform(8, 14))
 
 # Sign in
 # ============================================
-# LOGIN - ESPERANDO CARGA DINÁMICA DEL POPUP
+# LOGIN - ACCEDIENDO A SHADOW DOM
 # ============================================
 
 try:
-    # Primero, asegurarnos de que la página esté completamente cargada
-    WebDriverWait(driver, 20).until(
-        EC.presence_of_element_located((By.XPATH, "//button[contains(text(), 'Sign In')]"))
-    )
-    print("Página cargada correctamente")
-    
-    # Hacer clic en Sign In con JavaScript
+    # Primero, hacer clic en Sign In
     print("Abriendo popup de login...")
-    driver.execute_script("""
-        const buttons = document.querySelectorAll('button');
-        for (let btn of buttons) {
-            if (btn.textContent.includes('Sign In')) {
-                btn.click();
-                break;
-            }
-        }
-    """)
+    boton_signin = WebDriverWait(driver, 20).until(
+        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
+    )
+    boton_signin.click()
     print("Clic en Sign In ejecutado")
     
-    # ============================================
-    # ESPERAR A QUE EL CONTENIDO DEL POPUP SE CARGUE
-    # ============================================
+    # Esperar a que el popup se abra y cargue
+    time.sleep(5)
     print("Esperando carga del popup...")
-    time.sleep(3)
-    
-    # Buscar el popup por role='dialog'
-    popup = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.XPATH, "//div[@role='dialog']"))
-    )
-    print("Popup encontrado")
     
     # ============================================
-    # ESPERAR A QUE APAREZCAN LOS INPUTS DENTRO DEL POPUP
+    # MÉTODO 1: Buscar por ID directamente (recomendado)
     # ============================================
-    print("Esperando inputs dentro del popup...")
+    print("Buscando elementos por ID...")
     
-    # Método 1: Esperar específicamente a que haya inputs
     input_user = None
-    intentos = 0
-    max_intentos = 10
+    input_pass = None
+    boton_login = None
     
-    while intentos < max_intentos and not input_user:
+    try:
+        # Buscar el campo de usuario por ID
+        input_user = WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.ID, "_r_0_"))
+        )
+        print("✅ Campo de usuario encontrado por ID")
+    except Exception as e:
+        print(f"Error buscando por ID: {e}")
+    
+    # Si no se encuentra por ID, buscar dentro del Shadow DOM
+    if not input_user:
+        print("Intentando acceder a través de Shadow DOM...")
+        
         try:
-            # Buscar inputs dentro del popup
-            inputs = popup.find_elements(By.XPATH, ".//input")
-            print(f"Intento {intentos + 1}: {len(inputs)} inputs encontrados en popup")
+            # Encontrar el contenedor del Shadow DOM
+            shadow_host = driver.find_element(By.CSS_SELECTOR, "#smm-auth-widget-root")
+            print("Contenedor Shadow DOM encontrado")
             
-            for inp in inputs:
-                try:
-                    input_type = inp.get_attribute('type')
-                    placeholder = inp.get_attribute('placeholder')
-                    print(f"  Input: type={input_type}, placeholder={placeholder}")
-                    
-                    # Buscar campo de email/usuario
-                    if input_type == 'email' or (placeholder and ('email' in placeholder.lower() or 'usuario' in placeholder.lower())):
-                        input_user = inp
-                        print("¡Campo de usuario encontrado!")
-                        break
-                except:
-                    pass
+            # Acceder al Shadow DOM
+            shadow_root = driver.execute_script("return arguments[0].shadowRoot", shadow_host)
+            print("Shadow Root accedido")
             
-            if not input_user:
-                # También buscar inputs de tipo text
-                for inp in inputs:
-                    try:
-                        if inp.get_attribute('type') == 'text' and inp.is_displayed():
-                            input_user = inp
-                            print("¡Campo de usuario (text) encontrado!")
-                            break
-                    except:
-                        pass
-            
-            if not input_user:
-                # Esperar un poco más antes del siguiente intento
-                time.sleep(1)
-                intentos += 1
-                # Actualizar referencia al popup (por si cambia)
-                popup = driver.find_element(By.XPATH, "//div[@role='dialog']")
+            # Buscar inputs dentro del Shadow DOM
+            if shadow_root:
+                # Buscar por ID
+                input_user = shadow_root.find_element(By.ID, "_r_0_")
+                print("✅ Campo usuario encontrado en Shadow DOM")
+                
+                input_pass = shadow_root.find_element(By.ID, "_r_2_")
+                print("✅ Campo contraseña encontrado en Shadow DOM")
+                
+                # Buscar botón de login
+                boton_login = shadow_root.find_element(By.CSS_SELECTOR, "button.smm-auth-submit")
+                print("✅ Botón login encontrado en Shadow DOM")
                 
         except Exception as e:
-            print(f"Error en intento {intentos + 1}: {e}")
-            time.sleep(1)
-            intentos += 1
+            print(f"Error accediendo a Shadow DOM: {e}")
     
     # ============================================
-    # SI NO SE ENCUENTRA EL INPUT, FORZAR CON JAVASCRIPT
+    # MÉTODO 2: Buscar usando JavaScript directamente
     # ============================================
     if not input_user:
-        print("No se encontraron inputs en el popup, forzando con JavaScript...")
+        print("Intentando con JavaScript directo...")
         
-        # Usar JavaScript para encontrar y mostrar cualquier input oculto
-        driver.execute_script("""
-            // Buscar todos los inputs en la página
-            const inputs = document.querySelectorAll('input');
-            console.log('Total inputs:', inputs.length);
-            
-            // Forzar visibilidad de todos los inputs
-            for (let inp of inputs) {
-                // Hacer visible el input
-                inp.style.display = 'block';
-                inp.style.visibility = 'visible';
-                inp.style.opacity = '1';
-                
-                // Si el input está dentro de un contenedor oculto, mostrar el contenedor
-                let parent = inp.parentElement;
-                while (parent) {
-                    parent.style.display = 'block';
-                    parent.style.visibility = 'visible';
-                    parent.style.opacity = '1';
-                    parent = parent.parentElement;
-                }
-            }
-            
-            // También mostrar todos los contenedores de formulario
-            const forms = document.querySelectorAll('form');
-            for (let form of forms) {
-                form.style.display = 'block';
-                form.style.visibility = 'visible';
-                form.style.opacity = '1';
-            }
-        """)
-        print("Forzada visibilidad de inputs")
-        time.sleep(2)
-        
-        # Intentar encontrar inputs nuevamente
         try:
-            # Buscar en toda la página
-            all_inputs = driver.find_elements(By.XPATH, "//input")
-            print(f"Total inputs en página: {len(all_inputs)}")
+            # Usar JavaScript para encontrar los elementos
+            input_user = driver.execute_script("""
+                // Buscar el contenedor del Shadow DOM
+                const host = document.querySelector('#smm-auth-widget-root');
+                if (host && host.shadowRoot) {
+                    // Buscar dentro del Shadow DOM
+                    const input = host.shadowRoot.querySelector('#_r_0_');
+                    if (input) {
+                        // Forzar visibilidad
+                        input.style.display = 'block';
+                        input.style.visibility = 'visible';
+                        input.style.opacity = '1';
+                        return input;
+                    }
+                }
+                
+                // Si no está en Shadow DOM, buscar en el DOM principal
+                const inputMain = document.querySelector('#_r_0_');
+                if (inputMain) {
+                    inputMain.style.display = 'block';
+                    inputMain.style.visibility = 'visible';
+                    inputMain.style.opacity = '1';
+                    return inputMain;
+                }
+                return null;
+            """)
             
+            if input_user:
+                print("✅ Campo usuario encontrado con JavaScript")
+            else:
+                print("No se encontró el campo usuario con JavaScript")
+                
+        except Exception as e:
+            print(f"Error con JavaScript: {e}")
+    
+    # ============================================
+    # MÉTODO 3: Buscar en todo el DOM sin Shadow DOM
+    # ============================================
+    if not input_user:
+        print("Buscando en todo el DOM...")
+        
+        try:
+            # Buscar todos los inputs en la página (incluyendo Shadow DOM)
+            all_inputs = driver.execute_script("""
+                function findInputsInShadowDOM(root) {
+                    let inputs = [];
+                    
+                    // Buscar en el Shadow DOM
+                    if (root.shadowRoot) {
+                        const shadowInputs = root.shadowRoot.querySelectorAll('input');
+                        inputs = [...inputs, ...shadowInputs];
+                        
+                        // Buscar en hijos del Shadow DOM
+                        const children = root.shadowRoot.querySelectorAll('*');
+                        for (let child of children) {
+                            if (child.shadowRoot) {
+                                const childInputs = child.shadowRoot.querySelectorAll('input');
+                                inputs = [...inputs, ...childInputs];
+                            }
+                        }
+                    }
+                    
+                    // Buscar en hijos normales
+                    const children = root.querySelectorAll('*');
+                    for (let child of children) {
+                        if (child.shadowRoot) {
+                            const childInputs = child.shadowRoot.querySelectorAll('input');
+                            inputs = [...inputs, ...childInputs];
+                        }
+                    }
+                    
+                    return inputs;
+                }
+                
+                // Empezar desde el documento
+                let allInputs = document.querySelectorAll('input');
+                const host = document.querySelector('#smm-auth-widget-root');
+                if (host) {
+                    const shadowInputs = findInputsInShadowDOM(host);
+                    allInputs = [...allInputs, ...shadowInputs];
+                }
+                
+                // Devolver solo los inputs visibles
+                return Array.from(allInputs).filter(inp => {
+                    const rect = inp.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0;
+                });
+            """)
+            
+            print(f"Inputs encontrados en todo el DOM: {len(all_inputs)}")
+            
+            # Buscar el input con ID _r_0_
             for inp in all_inputs:
                 try:
-                    if inp.is_displayed():
-                        input_type = inp.get_attribute('type')
-                        placeholder = inp.get_attribute('placeholder')
-                        print(f"Input visible: type={input_type}, placeholder={placeholder}")
-                        
-                        if input_type == 'email' or (placeholder and 'email' in placeholder.lower()):
-                            input_user = inp
-                            print("¡Campo de usuario encontrado después de forzar!")
-                            break
+                    inp_id = inp.get_attribute('id')
+                    if inp_id == '_r_0_':
+                        input_user = inp
+                        print("✅ Campo usuario encontrado en DOM completo")
+                    elif inp_id == '_r_2_':
+                        input_pass = inp
+                        print("✅ Campo contraseña encontrado en DOM completo")
                 except:
                     pass
-        except:
-            pass
-    
-    # ============================================
-    # SI AÚN NO SE ENCUENTRA, USAR SELENIUM PARA ESPERAR
-    # ============================================
-    if not input_user:
-        print("Usando WebDriverWait para esperar inputs...")
-        try:
-            # Esperar a que aparezca cualquier input dentro del popup
-            wait = WebDriverWait(driver, 20)
-            input_user = wait.until(
-                EC.presence_of_element_located((By.XPATH, "//div[@role='dialog']//input"))
-            )
-            print("Input encontrado con WebDriverWait!")
+                    
         except Exception as e:
-            print(f"WebDriverWait falló: {e}")
+            print(f"Error buscando en todo el DOM: {e}")
     
+    # ============================================
+    # MÉTODO 4: Usar el HTML que tenemos (último recurso)
+    # ============================================
     if not input_user:
-        # Guardar debug final
-        print("\n=== DEBUG FINAL ===")
-        with open('debug_final.html', 'w', encoding='utf-8') as f:
+        print("Usando HTML conocido para encontrar elementos...")
+        
+        try:
+            # Usar JavaScript para buscar por selector más específico
+            input_user = driver.execute_script("""
+                // Buscar el div con clase actionWrapper
+                const actionWrapper = document.querySelector('.actionWrapper');
+                if (actionWrapper) {
+                    // Buscar inputs dentro
+                    const inputs = actionWrapper.querySelectorAll('input');
+                    for (let inp of inputs) {
+                        if (inp.id === '_r_0_') {
+                            inp.style.display = 'block';
+                            inp.style.visibility = 'visible';
+                            inp.style.opacity = '1';
+                            return inp;
+                        }
+                    }
+                }
+                
+                // Buscar en cualquier div que contenga el formulario
+                const forms = document.querySelectorAll('div');
+                for (let form of forms) {
+                    if (form.innerHTML.includes('_r_0_')) {
+                        const inputs = form.querySelectorAll('input');
+                        for (let inp of inputs) {
+                            if (inp.id === '_r_0_') {
+                                inp.style.display = 'block';
+                                inp.style.visibility = 'visible';
+                                inp.style.opacity = '1';
+                                return inp;
+                            }
+                        }
+                    }
+                }
+                return null;
+            """)
+            
+            if input_user:
+                print("✅ Campo usuario encontrado con HTML conocido")
+                
+                # Buscar contraseña con el mismo método
+                input_pass = driver.execute_script("""
+                    const forms = document.querySelectorAll('div');
+                    for (let form of forms) {
+                        if (form.innerHTML.includes('_r_2_')) {
+                            const inputs = form.querySelectorAll('input');
+                            for (let inp of inputs) {
+                                if (inp.id === '_r_2_') {
+                                    inp.style.display = 'block';
+                                    inp.style.visibility = 'visible';
+                                    inp.style.opacity = '1';
+                                    return inp;
+                                }
+                            }
+                        }
+                    }
+                    return null;
+                """)
+                
+                if input_pass:
+                    print("✅ Campo contraseña encontrado con HTML conocido")
+                    
+                # Buscar botón
+                boton_login = driver.execute_script("""
+                    const btn = document.querySelector('.smm-auth-submit');
+                    if (btn) {
+                        btn.style.display = 'block';
+                        btn.style.visibility = 'visible';
+                        btn.style.opacity = '1';
+                        // Habilitar el botón si está deshabilitado
+                        btn.disabled = false;
+                        return btn;
+                    }
+                    return null;
+                """)
+                
+                if boton_login:
+                    print("✅ Botón login encontrado con HTML conocido")
+                    
+        except Exception as e:
+            print(f"Error con HTML conocido: {e}")
+    
+    # ============================================
+    # VERIFICAR FINAL
+    # ============================================
+    if not input_user:
+        print("\n=== ERROR: No se encontraron los elementos ===")
+        print("Guardando archivos de debug...")
+        with open('debug_final_completo.html', 'w', encoding='utf-8') as f:
             f.write(driver.page_source)
-        driver.save_screenshot("debug_final.png")
-        
-        # Listar todos los elementos dentro del popup
-        try:
-            popup = driver.find_element(By.XPATH, "//div[@role='dialog']")
-            html_inner = popup.get_attribute('innerHTML')
-            print("Contenido del popup:")
-            print(html_inner[:500])
-        except:
-            pass
-        
-        raise Exception("No se pudo encontrar el campo de usuario después de todos los intentos")
-    
-    # ============================================
-    # ENCONTRAR CONTRASEÑA Y BOTÓN
-    # ============================================
-    print("\n--- Buscando contraseña y botón ---")
-    
-    # Buscar contraseña
-    input_pass = None
-    try:
-        # Buscar en el popup
-        input_pass = driver.find_element(By.XPATH, "//div[@role='dialog']//input[@type='password']")
-        print("Contraseña encontrada en popup")
-    except:
-        try:
-            # Buscar en toda la página
-            input_pass = driver.find_element(By.XPATH, "//input[@type='password']")
-            print("Contraseña encontrada en página")
-        except:
-            pass
+        driver.save_screenshot('debug_final_screenshot.png')
+        raise Exception("No se pudo encontrar el campo de usuario")
     
     if not input_pass:
-        raise Exception("No se pudo encontrar el campo de contraseña")
-    
-    # Buscar botón login
-    boton_login = None
-    try:
-        # Buscar botón dentro del popup
-        boton_login = driver.find_element(By.XPATH, "//div[@role='dialog']//button[@type='submit']")
-        print("Botón encontrado en popup")
-    except:
-        try:
-            # Buscar botón por texto
-            boton_login = driver.find_element(By.XPATH, "//div[@role='dialog']//button[contains(text(), 'Sign In')]")
-            print("Botón encontrado por texto")
-        except:
-            try:
-                # Buscar en toda la página
-                boton_login = driver.find_element(By.XPATH, "//button[@type='submit']")
-                print("Botón encontrado en página")
-            except:
-                pass
+        # Intentar encontrar contraseña con JavaScript
+        input_pass = driver.execute_script("""
+            const inputs = document.querySelectorAll('input');
+            for (let inp of inputs) {
+                if (inp.type === 'password') {
+                    return inp;
+                }
+            }
+            return null;
+        """)
+        if not input_pass:
+            raise Exception("No se pudo encontrar el campo de contraseña")
     
     if not boton_login:
-        raise Exception("No se pudo encontrar el botón de login")
+        # Intentar encontrar botón con JavaScript
+        boton_login = driver.execute_script("""
+            const btns = document.querySelectorAll('button');
+            for (let btn of btns) {
+                if (btn.textContent.includes('Sign in') || btn.textContent.includes('Sign In')) {
+                    btn.disabled = false;
+                    return btn;
+                }
+            }
+            return null;
+        """)
+        if not boton_login:
+            raise Exception("No se pudo encontrar el botón de login")
     
     # ============================================
     # INGRESAR CREDENCIALES
@@ -309,18 +386,18 @@ try:
     # Limpiar y escribir
     input_user.clear()
     input_user.send_keys(user)
-    print("Usuario ingresado")
+    print("✅ Usuario ingresado")
     
     input_pass.clear()
     input_pass.send_keys(password)
-    print("Contraseña ingresada")
+    print("✅ Contraseña ingresada")
     
-    # Hacer clic en login
+    # Hacer clic en el botón
     boton_login.click()
-    print("Login enviado")
+    print("✅ Login enviado")
     
     # Esperar a que cargue
-    time.sleep(random.uniform(5, 8))
+    time.sleep(5)
     
     print("✅ Proceso de login completado")
     
