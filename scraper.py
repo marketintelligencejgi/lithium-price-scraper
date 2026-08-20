@@ -15,8 +15,33 @@ import subprocess
 import random
 from datetime import datetime
 
-###----------------------------------------------------------------------> INICIO <----------------------------------------------------------------------###
+def debug_login_page(driver):
+    """Guarda información de la página de login para debugging"""
+    print("=== DEBUG LOGIN PAGE ===")
+    # Guardar HTML
+    with open('login_page.html', 'w', encoding='utf-8') as f:
+        f.write(driver.page_source)
+    
+    # Mostrar todos los inputs
+    inputs = driver.find_elements(By.XPATH, "//input")
+    print(f"Total inputs encontrados: {len(inputs)}")
+    for i, inp in enumerate(inputs):
+        try:
+            print(f"Input {i}: type={inp.get_attribute('type')}, placeholder={inp.get_attribute('placeholder')}, id={inp.get_attribute('id')}, class={inp.get_attribute('class')}")
+        except:
+            pass
+    
+    # Mostrar todos los botones
+    botones = driver.find_elements(By.XPATH, "//button")
+    print(f"Total botones encontrados: {len(botones)}")
+    for i, btn in enumerate(botones):
+        try:
+            print(f"Botón {i}: text={btn.text}, type={btn.get_attribute('type')}, class={btn.get_attribute('class')}")
+        except:
+            pass
+    print("=== FIN DEBUG ===")
 
+###----------------------------------------------------------------------> INICIO <----------------------------------------------------------------------###
 user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
@@ -52,10 +77,38 @@ boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, "/
 boton.click()
 time.sleep(random.uniform(3.5, 6.5))
 
-input_user = driver.find_element(By.XPATH, '//*[@id="_r_0_"]')
-input_pass = driver.find_element(By.XPATH, '//*[@id="_r_2_"]')
-boton = driver.find_element(By.XPATH, '//*[@id="action"]/div[1]/div[1]/div/div[1]/form/div[4]/div/div/div/div/button')
-# boton = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH,"//div[contains(@class,'loginWrapper') and contains(@class,'modal')]//form/div[4]//button")))
+# Debug
+debug_login_page(driver)
+time.sleep(random.uniform(3.5, 6.5))
+
+# Buscar elementos de login con múltiples estrategias
+try:
+    # Primero intentamos con placeholder
+    input_user = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Email']"))
+    )
+except:
+    # Si falla, buscamos por tipo
+    input_user = driver.find_element(By.XPATH, "//input[@type='email']")
+
+try:
+    input_pass = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Password']"))
+    )
+except:
+    input_pass = driver.find_element(By.XPATH, "//input[@type='password']")
+
+# Botón de login
+try:
+    boton = WebDriverWait(driver, 10).until(
+        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
+    )
+except:
+    boton = driver.find_element(By.XPATH, "//button[@type='submit']")
+
+input_user.send_keys(user)
+input_pass.send_keys(password)
+boton.click()
 
 input_user.send_keys(user)
 input_pass.send_keys(password)
