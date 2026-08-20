@@ -74,330 +74,317 @@ time.sleep(random.uniform(8, 14))
 
 # Sign in
 # ============================================
-# LOGIN - ACCEDIENDO A SHADOW DOM
+# LOGIN - BUSCANDO EN IFRAMES CON SHADOW DOM
 # ============================================
 
 try:
     # Primero, hacer clic en Sign In
     print("Abriendo popup de login...")
-    boton_signin = WebDriverWait(driver, 20).until(
-        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
-    )
-    boton_signin.click()
-    print("Clic en Sign In ejecutado")
     
-    # Esperar a que el popup se abra y cargue
+    # Buscar el botón de Sign In de varias formas
+    boton_signin = None
+    try:
+        boton_signin = WebDriverWait(driver, 20).until(
+            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
+        )
+    except:
+        try:
+            boton_signin = driver.find_element(By.CSS_SELECTOR, "button.signInButton")
+        except:
+            pass
+    
+    if boton_signin:
+        boton_signin.click()
+        print("✅ Clic en Sign In ejecutado")
+    else:
+        # Usar JavaScript como respaldo
+        driver.execute_script("""
+            const btn = document.querySelector('button.signInButton');
+            if (btn) btn.click();
+        """)
+        print("✅ Clic en Sign In con JavaScript")
+    
+    # Esperar a que el popup se abra
     time.sleep(5)
     print("Esperando carga del popup...")
     
     # ============================================
-    # MÉTODO 1: Buscar por ID directamente (recomendado)
+    # BUSCAR EN TODOS LOS IFRAMES
     # ============================================
-    print("Buscando elementos por ID...")
+    print("Buscando en iframes...")
     
     input_user = None
     input_pass = None
     boton_login = None
+    iframe_encontrado = None
     
-    try:
-        # Buscar el campo de usuario por ID
-        input_user = WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.ID, "_r_0_"))
-        )
-        print("✅ Campo de usuario encontrado por ID")
-    except Exception as e:
-        print(f"Error buscando por ID: {e}")
+    # Volver al contexto principal
+    driver.switch_to.default_content()
     
-    # Si no se encuentra por ID, buscar dentro del Shadow DOM
-    if not input_user:
-        print("Intentando acceder a través de Shadow DOM...")
-        
+    # Encontrar todos los iframes
+    iframes = driver.find_elements(By.TAG_NAME, "iframe")
+    print(f"Iframes encontrados: {len(iframes)}")
+    
+    # Mostrar información de cada iframe
+    for i, iframe in enumerate(iframes):
         try:
-            # Encontrar el contenedor del Shadow DOM
-            shadow_host = driver.find_element(By.CSS_SELECTOR, "#smm-auth-widget-root")
-            print("Contenedor Shadow DOM encontrado")
-            
-            # Acceder al Shadow DOM
-            shadow_root = driver.execute_script("return arguments[0].shadowRoot", shadow_host)
-            print("Shadow Root accedido")
-            
-            # Buscar inputs dentro del Shadow DOM
-            if shadow_root:
-                # Buscar por ID
-                input_user = shadow_root.find_element(By.ID, "_r_0_")
-                print("✅ Campo usuario encontrado en Shadow DOM")
-                
-                input_pass = shadow_root.find_element(By.ID, "_r_2_")
-                print("✅ Campo contraseña encontrado en Shadow DOM")
-                
-                # Buscar botón de login
-                boton_login = shadow_root.find_element(By.CSS_SELECTOR, "button.smm-auth-submit")
-                print("✅ Botón login encontrado en Shadow DOM")
-                
-        except Exception as e:
-            print(f"Error accediendo a Shadow DOM: {e}")
+            src = iframe.get_attribute('src')
+            print(f"Iframe {i}: src={src[:100] if src else 'No src'}")
+        except:
+            pass
     
-    # ============================================
-    # MÉTODO 2: Buscar usando JavaScript directamente
-    # ============================================
-    if not input_user:
-        print("Intentando con JavaScript directo...")
-        
+    # Buscar en cada iframe
+    for i in range(len(iframes)):
         try:
-            # Usar JavaScript para encontrar los elementos
-            input_user = driver.execute_script("""
-                // Buscar el contenedor del Shadow DOM
-                const host = document.querySelector('#smm-auth-widget-root');
-                if (host && host.shadowRoot) {
-                    // Buscar dentro del Shadow DOM
-                    const input = host.shadowRoot.querySelector('#_r_0_');
-                    if (input) {
-                        // Forzar visibilidad
-                        input.style.display = 'block';
-                        input.style.visibility = 'visible';
-                        input.style.opacity = '1';
-                        return input;
-                    }
-                }
-                
-                // Si no está en Shadow DOM, buscar en el DOM principal
-                const inputMain = document.querySelector('#_r_0_');
-                if (inputMain) {
-                    inputMain.style.display = 'block';
-                    inputMain.style.visibility = 'visible';
-                    inputMain.style.opacity = '1';
-                    return inputMain;
-                }
-                return null;
-            """)
+            print(f"\n--- Probando iframe {i} ---")
+            driver.switch_to.default_content()
             
-            if input_user:
-                print("✅ Campo usuario encontrado con JavaScript")
-            else:
-                print("No se encontró el campo usuario con JavaScript")
-                
-        except Exception as e:
-            print(f"Error con JavaScript: {e}")
-    
-    # ============================================
-    # MÉTODO 3: Buscar en todo el DOM sin Shadow DOM
-    # ============================================
-    if not input_user:
-        print("Buscando en todo el DOM...")
-        
-        try:
-            # Buscar todos los inputs en la página (incluyendo Shadow DOM)
-            all_inputs = driver.execute_script("""
-                function findInputsInShadowDOM(root) {
-                    let inputs = [];
-                    
-                    // Buscar en el Shadow DOM
-                    if (root.shadowRoot) {
-                        const shadowInputs = root.shadowRoot.querySelectorAll('input');
-                        inputs = [...inputs, ...shadowInputs];
-                        
-                        // Buscar en hijos del Shadow DOM
-                        const children = root.shadowRoot.querySelectorAll('*');
-                        for (let child of children) {
-                            if (child.shadowRoot) {
-                                const childInputs = child.shadowRoot.querySelectorAll('input');
-                                inputs = [...inputs, ...childInputs];
-                            }
-                        }
-                    }
-                    
-                    // Buscar en hijos normales
-                    const children = root.querySelectorAll('*');
-                    for (let child of children) {
-                        if (child.shadowRoot) {
-                            const childInputs = child.shadowRoot.querySelectorAll('input');
-                            inputs = [...inputs, ...childInputs];
-                        }
-                    }
-                    
-                    return inputs;
-                }
-                
-                // Empezar desde el documento
-                let allInputs = document.querySelectorAll('input');
-                const host = document.querySelector('#smm-auth-widget-root');
-                if (host) {
-                    const shadowInputs = findInputsInShadowDOM(host);
-                    allInputs = [...allInputs, ...shadowInputs];
-                }
-                
-                // Devolver solo los inputs visibles
-                return Array.from(allInputs).filter(inp => {
-                    const rect = inp.getBoundingClientRect();
-                    return rect.width > 0 && rect.height > 0;
-                });
-            """)
+            # Cambiar al iframe
+            iframe = driver.find_elements(By.TAG_NAME, "iframe")[i]
+            driver.switch_to.frame(iframe)
+            print(f"Cambiado al iframe {i}")
             
-            print(f"Inputs encontrados en todo el DOM: {len(all_inputs)}")
+            # Buscar inputs en este iframe
+            inputs = driver.find_elements(By.XPATH, "//input")
+            print(f"Inputs en iframe {i}: {len(inputs)}")
             
-            # Buscar el input con ID _r_0_
-            for inp in all_inputs:
+            # Mostrar detalles de los inputs
+            for inp in inputs:
                 try:
                     inp_id = inp.get_attribute('id')
+                    inp_type = inp.get_attribute('type')
+                    inp_placeholder = inp.get_attribute('placeholder')
+                    print(f"  Input: id={inp_id}, type={inp_type}, placeholder={inp_placeholder}")
+                    
                     if inp_id == '_r_0_':
                         input_user = inp
-                        print("✅ Campo usuario encontrado en DOM completo")
+                        iframe_encontrado = i
+                        print(f"✅ Campo usuario encontrado en iframe {i}")
                     elif inp_id == '_r_2_':
                         input_pass = inp
-                        print("✅ Campo contraseña encontrado en DOM completo")
+                        print(f"✅ Campo contraseña encontrado en iframe {i}")
                 except:
                     pass
-                    
+            
+            # Buscar botón
+            if not boton_login:
+                try:
+                    botones = driver.find_elements(By.XPATH, "//button")
+                    for btn in botones:
+                        try:
+                            btn_text = btn.text
+                            btn_class = btn.get_attribute('class')
+                            if 'smm-auth-submit' in btn_class or 'Sign in' in btn_text:
+                                boton_login = btn
+                                print(f"✅ Botón login encontrado en iframe {i}")
+                                break
+                        except:
+                            pass
+                except:
+                    pass
+            
+            # Si encontramos todos los elementos, salir
+            if input_user and input_pass and boton_login:
+                print(f"✅ Todos los elementos encontrados en iframe {i}")
+                break
+                
         except Exception as e:
-            print(f"Error buscando en todo el DOM: {e}")
+            print(f"Error en iframe {i}: {e}")
+        finally:
+            # Volver al contexto principal
+            if not (input_user and input_pass and boton_login):
+                try:
+                    driver.switch_to.default_content()
+                except:
+                    pass
     
     # ============================================
-    # MÉTODO 4: Usar el HTML que tenemos (último recurso)
+    # SI NO SE ENCONTRÓ EN IFRAMES, BUSCAR CON JAVASCRIPT
     # ============================================
     if not input_user:
-        print("Usando HTML conocido para encontrar elementos...")
+        print("\nNo se encontraron elementos en iframes. Intentando con JavaScript...")
         
-        try:
-            # Usar JavaScript para buscar por selector más específico
-            input_user = driver.execute_script("""
-                // Buscar el div con clase actionWrapper
-                const actionWrapper = document.querySelector('.actionWrapper');
-                if (actionWrapper) {
-                    // Buscar inputs dentro
-                    const inputs = actionWrapper.querySelectorAll('input');
-                    for (let inp of inputs) {
-                        if (inp.id === '_r_0_') {
-                            inp.style.display = 'block';
-                            inp.style.visibility = 'visible';
-                            inp.style.opacity = '1';
-                            return inp;
-                        }
-                    }
-                }
-                
-                // Buscar en cualquier div que contenga el formulario
-                const forms = document.querySelectorAll('div');
-                for (let form of forms) {
-                    if (form.innerHTML.includes('_r_0_')) {
-                        const inputs = form.querySelectorAll('input');
-                        for (let inp of inputs) {
-                            if (inp.id === '_r_0_') {
-                                inp.style.display = 'block';
-                                inp.style.visibility = 'visible';
-                                inp.style.opacity = '1';
-                                return inp;
-                            }
-                        }
-                    }
-                }
-                return null;
-            """)
-            
-            if input_user:
-                print("✅ Campo usuario encontrado con HTML conocido")
-                
-                # Buscar contraseña con el mismo método
-                input_pass = driver.execute_script("""
-                    const forms = document.querySelectorAll('div');
-                    for (let form of forms) {
-                        if (form.innerHTML.includes('_r_2_')) {
-                            const inputs = form.querySelectorAll('input');
+        # Volver al contexto principal
+        driver.switch_to.default_content()
+        
+        # Buscar con JavaScript en todos los iframes
+        result = driver.execute_script("""
+            function findInIframes() {
+                const iframes = document.querySelectorAll('iframe');
+                for (let iframe of iframes) {
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        if (doc) {
+                            // Buscar inputs
+                            const inputs = doc.querySelectorAll('input');
                             for (let inp of inputs) {
+                                if (inp.id === '_r_0_') {
+                                    return { type: 'user', element: inp, iframe: iframe };
+                                }
                                 if (inp.id === '_r_2_') {
-                                    inp.style.display = 'block';
-                                    inp.style.visibility = 'visible';
-                                    inp.style.opacity = '1';
-                                    return inp;
+                                    return { type: 'pass', element: inp, iframe: iframe };
                                 }
                             }
                         }
+                    } catch(e) {
+                        console.log('Error accediendo a iframe:', e);
                     }
-                    return null;
-                """)
-                
-                if input_pass:
-                    print("✅ Campo contraseña encontrado con HTML conocido")
-                    
-                # Buscar botón
-                boton_login = driver.execute_script("""
-                    const btn = document.querySelector('.smm-auth-submit');
-                    if (btn) {
-                        btn.style.display = 'block';
-                        btn.style.visibility = 'visible';
-                        btn.style.opacity = '1';
-                        // Habilitar el botón si está deshabilitado
-                        btn.disabled = false;
-                        return btn;
-                    }
-                    return null;
-                """)
-                
-                if boton_login:
-                    print("✅ Botón login encontrado con HTML conocido")
-                    
-        except Exception as e:
-            print(f"Error con HTML conocido: {e}")
+                }
+                return null;
+            }
+            
+            // Buscar en el DOM principal también
+            const mainInputs = document.querySelectorAll('input');
+            for (let inp of mainInputs) {
+                if (inp.id === '_r_0_') {
+                    return { type: 'user', element: inp, iframe: null };
+                }
+                if (inp.id === '_r_2_') {
+                    return { type: 'pass', element: inp, iframe: null };
+                }
+            }
+            
+            return findInIframes();
+        """)
+        
+        if result:
+            print(f"JavaScript encontró elementos en iframe")
+            # Recuperar los elementos encontrados
+            try:
+                # Buscar nuevamente usando Selenium después de saber dónde está
+                iframes = driver.find_elements(By.TAG_NAME, "iframe")
+                for iframe in iframes:
+                    try:
+                        driver.switch_to.frame(iframe)
+                        inputs = driver.find_elements(By.XPATH, "//input")
+                        for inp in inputs:
+                            if inp.get_attribute('id') == '_r_0_':
+                                input_user = inp
+                                print("✅ Usuario encontrado después de JavaScript")
+                            if inp.get_attribute('id') == '_r_2_':
+                                input_pass = inp
+                                print("✅ Contraseña encontrada después de JavaScript")
+                        if input_user and input_pass:
+                            # Buscar botón
+                            botones = driver.find_elements(By.XPATH, "//button")
+                            for btn in botones:
+                                if 'smm-auth-submit' in btn.get_attribute('class'):
+                                    boton_login = btn
+                                    print("✅ Botón encontrado después de JavaScript")
+                                    break
+                            if boton_login:
+                                break
+                        driver.switch_to.default_content()
+                    except:
+                        driver.switch_to.default_content()
+            except Exception as e:
+                print(f"Error recuperando elementos: {e}")
     
     # ============================================
     # VERIFICAR FINAL
     # ============================================
     if not input_user:
-        print("\n=== ERROR: No se encontraron los elementos ===")
-        print("Guardando archivos de debug...")
-        with open('debug_final_completo.html', 'w', encoding='utf-8') as f:
-            f.write(driver.page_source)
-        driver.save_screenshot('debug_final_screenshot.png')
-        raise Exception("No se pudo encontrar el campo de usuario")
-    
-    if not input_pass:
-        # Intentar encontrar contraseña con JavaScript
-        input_pass = driver.execute_script("""
-            const inputs = document.querySelectorAll('input');
-            for (let inp of inputs) {
-                if (inp.type === 'password') {
-                    return inp;
-                }
-            }
-            return null;
-        """)
-        if not input_pass:
-            raise Exception("No se pudo encontrar el campo de contraseña")
-    
-    if not boton_login:
-        # Intentar encontrar botón con JavaScript
-        boton_login = driver.execute_script("""
-            const btns = document.querySelectorAll('button');
-            for (let btn of btns) {
-                if (btn.textContent.includes('Sign in') || btn.textContent.includes('Sign In')) {
-                    btn.disabled = false;
-                    return btn;
-                }
-            }
-            return null;
-        """)
-        if not boton_login:
-            raise Exception("No se pudo encontrar el botón de login")
+        # Último intento: Buscar por texto en la página
+        print("\nBuscando por texto en la página...")
+        driver.switch_to.default_content()
+        
+        # Buscar cualquier elemento que contenga "Email"
+        elementos_texto = driver.find_elements(By.XPATH, "//*[contains(text(), 'Email')]")
+        print(f"Elementos con texto 'Email': {len(elementos_texto)}")
+        
+        # Si encontramos texto "Email", buscar el input cercano
+        for elem in elementos_texto:
+            try:
+                # Buscar el siguiente input después del elemento
+                input_cercano = elem.find_element(By.XPATH, "./following::input[1]")
+                if input_cercano:
+                    input_user = input_cercano
+                    print("✅ Usuario encontrado por texto cercano")
+                    break
+            except:
+                pass
+        
+        if not input_user:
+            print("\n=== ERROR FINAL: No se encontraron los elementos ===")
+            # Guardar información de debug
+            with open('debug_final_completo.html', 'w', encoding='utf-8') as f:
+                f.write(driver.page_source)
+            driver.save_screenshot('debug_final_screenshot.png')
+            
+            # Mostrar todos los iframes y su contenido
+            driver.switch_to.default_content()
+            iframes = driver.find_elements(By.TAG_NAME, "iframe")
+            print(f"\nTotal iframes: {len(iframes)}")
+            for i, iframe in enumerate(iframes):
+                try:
+                    driver.switch_to.frame(iframe)
+                    print(f"\nIframe {i}:")
+                    print(f"  URL: {driver.current_url}")
+                    print(f"  Title: {driver.title}")
+                    print(f"  Inputs: {len(driver.find_elements(By.XPATH, '//input'))}")
+                    driver.switch_to.default_content()
+                except:
+                    print(f"Iframe {i}: No se pudo acceder")
+            
+            raise Exception("No se pudo encontrar el campo de usuario después de todos los intentos")
     
     # ============================================
     # INGRESAR CREDENCIALES
     # ============================================
     print("\n--- Ingresando credenciales ---")
     
+    # Asegurarse de estar en el iframe correcto si fue encontrado
+    if iframe_encontrado is not None:
+        driver.switch_to.default_content()
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        if iframe_encontrado < len(iframes):
+            driver.switch_to.frame(iframes[iframe_encontrado])
+            print(f"Cambiado al iframe {iframe_encontrado} para ingresar datos")
+    
     # Limpiar y escribir
-    input_user.clear()
-    input_user.send_keys(user)
-    print("✅ Usuario ingresado")
+    try:
+        input_user.clear()
+        input_user.send_keys(user)
+        print("✅ Usuario ingresado")
+    except:
+        # Si falla, usar JavaScript
+        driver.execute_script(f"arguments[0].value = '{user}';", input_user)
+        print("✅ Usuario ingresado con JavaScript")
     
-    input_pass.clear()
-    input_pass.send_keys(password)
-    print("✅ Contraseña ingresada")
+    try:
+        input_pass.clear()
+        input_pass.send_keys(password)
+        print("✅ Contraseña ingresada")
+    except:
+        driver.execute_script(f"arguments[0].value = '{password}';", input_pass)
+        print("✅ Contraseña ingresada con JavaScript")
     
-    # Hacer clic en el botón
-    boton_login.click()
-    print("✅ Login enviado")
+    # Buscar y hacer clic en el botón
+    if boton_login:
+        try:
+            # Habilitar el botón si está deshabilitado
+            driver.execute_script("arguments[0].disabled = false;", boton_login)
+            boton_login.click()
+            print("✅ Login enviado")
+        except:
+            # Si falla, usar JavaScript
+            driver.execute_script("arguments[0].click();", boton_login)
+            print("✅ Login enviado con JavaScript")
     
     # Esperar a que cargue
     time.sleep(5)
+    
+    # Verificar si el login fue exitoso
+    try:
+        driver.switch_to.default_content()
+        # Buscar un elemento que indique que estamos logueados
+        elementos_logout = driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out')]")
+        if elementos_logout:
+            print("✅ Login exitoso - usuario logueado")
+        else:
+            print("⚠️ No se pudo confirmar login exitoso, continuando...")
+    except:
+        pass
     
     print("✅ Proceso de login completado")
     
