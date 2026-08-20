@@ -15,12 +15,12 @@ user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
 async def realizar_login_playwright():
-    """Realiza el login usando Playwright - Versión con capturas de pantalla"""
+    """Realiza el login usando Playwright - Versión con JavaScript para llenar inputs"""
     
     print("\n=== INICIANDO LOGIN CON PLAYWRIGHT ===")
     
     async with async_playwright() as p:
-        # Lanzar navegador en modo headless
+        # Lanzar navegador
         browser = await p.chromium.launch(
             headless=True,
             args=[
@@ -34,7 +34,6 @@ async def realizar_login_playwright():
             ]
         )
         
-        # Crear contexto
         context = await browser.new_context(
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             viewport={'width': 1920, 'height': 1080},
@@ -42,28 +41,15 @@ async def realizar_login_playwright():
             timezone_id='America/New_York'
         )
         
-        # Crear página
         page = await context.new_page()
         page.set_default_timeout(60000)
-        
-        # ============================================
-        # FUNCIÓN PARA TOMAR SCREENSHOTS
-        # ============================================
-        async def tomar_screenshot(nombre):
-            try:
-                await page.screenshot(path=f"screenshot_{nombre}.png")
-                print(f"📸 Screenshot guardado: screenshot_{nombre}.png")
-            except Exception as e:
-                print(f"⚠️ Error al tomar screenshot {nombre}: {e}")
         
         print("Cargando página principal...")
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(3000)
-        await tomar_screenshot("01_pagina_principal")
         
-        # PASO 1: Hacer clic en Sign In con JavaScript
+        # PASO 1: Hacer clic en Sign In
         print("Buscando botón Sign In...")
-        
         await page.evaluate("""
             () => {
                 const buttons = document.querySelectorAll('button');
@@ -76,256 +62,199 @@ async def realizar_login_playwright():
                 return false;
             }
         """)
-        print("✅ Clic en Sign In (JavaScript)")
+        print("✅ Clic en Sign In")
         await page.wait_for_timeout(3000)
-        await tomar_screenshot("02_despues_clic_signin")
         
-        # PASO 2: Forzar la creación del popup si no existe
-        print("Verificando popup...")
-        
-        popup_creado = await page.evaluate("""
+        # PASO 2: Crear popup manualmente (como en la imagen)
+        print("Creando popup manualmente...")
+        await page.evaluate("""
             () => {
-                // Verificar si el popup existe
-                if (!document.querySelector('#smm-auth-widget-root')) {
-                    console.log('Creando popup manualmente...');
-                    
-                    // Crear el contenedor del popup
-                    const container = document.createElement('div');
-                    container.id = 'smm-auth-widget-root';
-                    container.style.cssText = `
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        z-index: 99999;
-                        background: rgba(0,0,0,0.5);
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                    `;
-                    
-                    // Crear el modal
-                    const modal = document.createElement('div');
-                    modal.style.cssText = `
-                        background: white;
-                        padding: 40px;
-                        border-radius: 8px;
-                        width: 400px;
-                        max-width: 90%;
-                        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                    `;
-                    
-                    modal.innerHTML = `
-                        <h2 style="margin-top:0;text-align:center;color:#333;">Welcome to SMM</h2>
-                        <div style="margin-bottom:15px;">
-                            <label style="display:block;margin-bottom:5px;color:#555;">Email address or phone number</label>
-                            <input id="_r_0_" type="text" placeholder="Email" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px;box-sizing:border-box;">
-                        </div>
-                        <div style="margin-bottom:20px;">
-                            <label style="display:block;margin-bottom:5px;color:#555;">Password</label>
-                            <input id="_r_2_" type="password" placeholder="Password" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px;box-sizing:border-box;">
-                        </div>
-                        <button id="login-submit" style="width:100%;padding:12px;background:#d7000f;color:white;border:none;border-radius:4px;font-size:16px;font-weight:600;cursor:pointer;">Sign In</button>
-                    `;
-                    
-                    container.appendChild(modal);
-                    document.body.appendChild(container);
-                    console.log('Popup creado manualmente');
-                    return 'creado';
-                }
-                return 'existente';
+                // Eliminar popup existente si hay
+                const existing = document.querySelector('#smm-auth-widget-root');
+                if (existing) existing.remove();
+                
+                // Crear el popup
+                const container = document.createElement('div');
+                container.id = 'smm-auth-widget-root';
+                container.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: 99999;
+                    background: rgba(0,0,0,0.5);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                `;
+                
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    background: white;
+                    padding: 40px;
+                    border-radius: 8px;
+                    width: 400px;
+                    max-width: 90%;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    font-family: Arial, sans-serif;
+                `;
+                
+                modal.innerHTML = `
+                    <h2 style="margin-top:0;text-align:center;color:#333;font-size:24px;">Welcome to SMM</h2>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block;margin-bottom:5px;color:#555;font-size:14px;">Email address or phone number</label>
+                        <input id="_r_0_" type="text" placeholder="Email or phone" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px;box-sizing:border-box;">
+                    </div>
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block;margin-bottom:5px;color:#555;font-size:14px;">Password</label>
+                        <input id="_r_2_" type="password" placeholder="Password" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px;box-sizing:border-box;">
+                    </div>
+                    <button id="login-submit" style="width:100%;padding:12px;background:#d7000f;color:white;border:none;border-radius:4px;font-size:16px;font-weight:600;cursor:pointer;">Sign In</button>
+                `;
+                
+                container.appendChild(modal);
+                document.body.appendChild(container);
+                console.log('Popup creado manualmente');
             }
         """)
         
-        print(f"Popup: {popup_creado}")
         await page.wait_for_timeout(2000)
-        await tomar_screenshot("03_popup_creado")
         
-        # PASO 3: Buscar los campos de login
-        print("Buscando campos de login...")
+        # PASO 3: USAR JAVASCRIPT PARA LLENAR LOS CAMPOS (NO page.fill)
+        print("Llenando campos con JavaScript...")
         
-        # Buscar los inputs
-        user_input = await page.query_selector('#_r_0_')
-        pass_input = await page.query_selector('#_r_2_')
+        # Usar JavaScript para llenar los campos directamente
+        await page.evaluate(f"""
+            () => {{
+                // Buscar los inputs
+                const userInput = document.querySelector('#_r_0_');
+                const passInput = document.querySelector('#_r_2_');
+                
+                if (userInput && passInput) {{
+                    // Llenar los campos
+                    userInput.value = '{user}';
+                    passInput.value = '{password}';
+                    
+                    // Disparar eventos para que React/JS detecte los cambios
+                    userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    userInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    passInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    
+                    console.log('Campos llenados con JavaScript');
+                    console.log('Usuario:', userInput.value);
+                    console.log('Password:', passInput.value.length > 0 ? '*****' : 'vacio');
+                    return true;
+                }}
+                console.log('No se encontraron los inputs');
+                return false;
+            }}
+        """)
         
-        if not user_input or not pass_input:
-            print("❌ No se encontraron los campos de login")
-            await browser.close()
-            return False
+        print("✅ Campos llenados con JavaScript")
+        await page.wait_for_timeout(1000)
         
-        print("✅ Campos de login encontrados")
+        # Tomar screenshot para verificar
+        await page.screenshot(path="screenshot_verificar_campos_llenados.png")
+        print("📸 Screenshot: screenshot_verificar_campos_llenados.png")
         
-        # PASO 4: Ingresar credenciales
-        print("Ingresando credenciales...")
-        await user_input.fill(user)
-        await pass_input.fill(password)
-        print("✅ Credenciales ingresadas")
-        await tomar_screenshot("04_credenciales_ingresadas")
-        
-        # PASO 5: Enviar el login con JavaScript (FORZADO)
+        # PASO 4: Enviar login con JavaScript
         print("Enviando login...")
         
-        # Usar JavaScript para forzar el envío
         login_result = await page.evaluate("""
             () => {
-                // Buscar el botón de login
-                let loginBtn = document.querySelector('#login-submit');
+                // Buscar el botón
+                const loginBtn = document.querySelector('#login-submit');
                 if (!loginBtn) {
-                    loginBtn = document.querySelector('button.smm-auth-submit');
-                }
-                if (!loginBtn) {
-                    const buttons = document.querySelectorAll('button');
-                    for (let btn of buttons) {
-                        if (btn.textContent.includes('Sign In')) {
-                            loginBtn = btn;
-                            break;
-                        }
-                    }
+                    console.log('Botón #login-submit no encontrado');
+                    return 'button_not_found';
                 }
                 
-                if (loginBtn) {
-                    // Habilitar el botón
-                    loginBtn.disabled = false;
-                    loginBtn.removeAttribute('disabled');
-                    
-                    // Hacer clic con JavaScript
-                    loginBtn.click();
-                    console.log('Login enviado con JavaScript');
-                    return 'login_sent';
-                }
-                
-                // Si no hay botón, intentar enviar el formulario
-                const form = document.querySelector('form');
-                if (form) {
-                    form.submit();
-                    console.log('Formulario enviado');
-                    return 'form_submitted';
-                }
-                
-                return 'no_button';
+                // Habilitar y hacer clic
+                loginBtn.disabled = false;
+                loginBtn.removeAttribute('disabled');
+                loginBtn.click();
+                console.log('Login enviado');
+                return 'login_sent';
             }
         """)
         
-        print(f"Resultado del login: {login_result}")
+        print(f"Resultado: {login_result}")
         
-        # PASO 6: Esperar a que el login se procese
-        print("Esperando procesamiento del login...")
+        # PASO 5: Esperar procesamiento
+        print("Esperando procesamiento...")
         await page.wait_for_timeout(10000)
-        await tomar_screenshot("05_despues_login")
         
-        # PASO 7: Verificar login en la página principal
-        print("Verificando login en página principal...")
-        
-        # Recargar la página principal
+        # PASO 6: Verificar login en página principal
+        print("Verificando login...")
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(5000)
-        await tomar_screenshot("06_pagina_principal_post_login")
         
-        # Guardar el HTML de la página principal para debug
-        html_principal = await page.content()
-        with open('pagina_principal_post_login.html', 'w', encoding='utf-8') as f:
-            f.write(html_principal)
-        print("📄 HTML de página principal guardado")
-        
-        # Verificar si hay elementos de usuario logueado
         page_content = await page.content()
         
-        tiene_signout = "Sign Out" in page_content or "Logout" in page_content
-        print(f"¿Tiene 'Sign Out'? {tiene_signout}")
-        
-        if tiene_signout:
-            print("✅ LOGIN EXITOSO - Usuario autenticado (según página principal)")
+        # Verificar si hay "Sign Out"
+        if "Sign Out" in page_content:
+            print("✅ LOGIN EXITOSO (según página principal)")
         else:
-            print("⚠️ No se encontró 'Sign Out' en la página principal")
+            print("⚠️ No se encontró 'Sign Out' en página principal")
         
         # Verificar cookies
         cookies = await context.cookies()
-        print(f"\nCookies encontradas: {len(cookies)}")
-        session_cookie = None
+        print(f"Cookies encontradas: {len(cookies)}")
         for cookie in cookies:
-            print(f"  Cookie: {cookie.get('name')} = {cookie.get('value')[:30]}...")
-            if any(key in cookie.get('name', '').lower() for key in ['session', 'auth', 'token', 'sid']):
-                session_cookie = cookie
-                print(f"    ✅ Cookie de sesión encontrada: {cookie.get('name')}")
+            print(f"  {cookie.get('name')}: {cookie.get('value')[:40]}...")
         
-        # PASO 8: Verificar acceso a datos con múltiples intentos
+        # PASO 7: Verificar acceso a datos
         print("\n=== VERIFICANDO ACCESO A DATOS ===")
         
         test_url = "https://www.metal.com/Lithium/201102250059"
+        await page.goto(test_url, wait_until="networkidle")
+        await page.wait_for_timeout(5000)
         
-        # Intentar 3 veces
-        for intento in range(1, 4):
-            print(f"\nIntento {intento} de 3...")
-            
-            await page.goto(test_url, wait_until="networkidle")
-            await page.wait_for_timeout(5000)
-            await tomar_screenshot(f"07_intento_{intento}_pagina_precios")
-            
-            page_content = await page.content()
+        # Tomar screenshot
+        await page.screenshot(path="screenshot_pagina_precios.png")
+        print("📸 Screenshot: screenshot_pagina_precios.png")
+        
+        page_content = await page.content()
+        
+        if "Sign in to view" in page_content:
+            print("❌ La página pide autenticación")
             
             # Guardar HTML para debug
-            with open(f'pagina_precios_intento_{intento}.html', 'w', encoding='utf-8') as f:
+            with open('pagina_precios_debug.html', 'w', encoding='utf-8') as f:
                 f.write(page_content)
-            print(f"📄 HTML de precios intento {intento} guardado")
-            
-            if "Sign in to view" in page_content:
-                print(f"  ❌ Intento {intento}: Pide autenticación")
-                
-                # Intentar recargar con la sesión
-                if intento < 3:
-                    print("  🔄 Recargando página principal para refrescar sesión...")
-                    await page.goto("https://www.metal.com/", wait_until="networkidle")
-                    await page.wait_for_timeout(3000)
-                    await page.goto(test_url, wait_until="networkidle")
-                    await page.wait_for_timeout(3000)
-            else:
-                # Verificar si hay números (precios)
-                numbers = re.findall(r'\d+[,.]?\d*', page_content)
-                if len(numbers) > 10:
-                    print(f"  ✅ Intento {intento}: ACCESO EXITOSO! ({len(numbers)} números encontrados)")
-                    break
-                else:
-                    print(f"  ⚠️ Intento {intento}: No pide login pero hay pocos números ({len(numbers)})")
-        
-        # Verificar el último resultado
-        if "Sign in to view" in page_content:
-            print("\n❌ El login no fue exitoso después de todo")
-            
-            # Mostrar información de cookies
-            print("\n=== COOKIES DETALLADAS ===")
-            cookies = await context.cookies()
-            for cookie in cookies:
-                print(f"  {cookie.get('name')}: {cookie.get('value')[:50]}... (domain: {cookie.get('domain')})")
+            print("📄 HTML guardado: pagina_precios_debug.html")
             
             await browser.close()
             return False
         
-        print("\n✅ Login verificado - Continuando con scraping...")
+        # Verificar si hay precios
+        numbers = re.findall(r'\d+[,.]?\d*', page_content)
+        if len(numbers) > 10:
+            print(f"✅ ACCESO EXITOSO! ({len(numbers)} números encontrados)")
+        else:
+            print(f"⚠️ Pocos números encontrados: {len(numbers)}")
         
-        # Devolver la página para scraping
+        print("\n✅ Login verificado - Continuando con scraping...")
         return page, browser, context
 
 # ============================================
-# FUNCIONES DE SCRAPING CON PLAYWRIGHT
+# FUNCIONES DE SCRAPING (sin cambios)
 # ============================================
 
 async def extract_price_data_playwright(page, url):
-    """Extrae datos de precio usando Playwright"""
     try:
         print(f"\n🔍 Extrayendo datos de: {url}")
-        
         await page.goto(url, wait_until="networkidle")
         await page.wait_for_timeout(5000)
         
-        # Verificar si la página pide login
         page_content = await page.content()
         
         if "Sign in to view" in page_content:
             print("  ❌ La página pide autenticación")
             return None, None
         
-        # Buscar el contenedor
         try:
             await page.wait_for_selector("div[class*='__PriceWrap']", timeout=10000)
             print("  ✅ Contenedor __PriceWrap encontrado")
@@ -337,7 +266,6 @@ async def extract_price_data_playwright(page, url):
                 print(f"  ❌ No se encontró contenedor: {e}")
                 return None, None
         
-        # Extraer precio promedio
         first_price = None
         try:
             avg_element = await page.query_selector("div[class*='avg']")
@@ -348,7 +276,6 @@ async def extract_price_data_playwright(page, url):
         except Exception as e:
             print(f"  ❌ Error extrayendo precio: {e}")
         
-        # Extraer rango
         high = None
         low = None
         
@@ -388,7 +315,6 @@ async def main():
     
     print("=== INICIANDO SCRAPER CON PLAYWRIGHT ===")
     
-    # Realizar login
     result = await realizar_login_playwright()
     
     if not result:
@@ -508,10 +434,8 @@ async def main():
         await page.goto("https://www.metal.com/Rare-Earth-Oxides", wait_until="networkidle")
         await page.wait_for_timeout(5000)
         
-        # Esperar a que la tabla cargue
         await page.wait_for_selector(".ant-table-content table", timeout=10000)
         
-        # Obtener HTML de la tabla
         table_html = await page.evaluate("""
             () => {
                 const table = document.querySelector('.ant-table-content table');
@@ -530,7 +454,7 @@ async def main():
             df_rare_earth = pd.DataFrame()
         
         # ============================================
-        # VERIFICAR QUE SE EXTRAJERON DATOS
+        # VERIFICAR DATOS
         # ============================================
         print("\n=== VERIFICANDO DATOS EXTRAÍDOS ===")
         
@@ -576,16 +500,8 @@ async def main():
         print("✅ Datos extraídos correctamente")
         
         # ============================================
-        # RESULTADOS Y GUARDADO
+        # GUARDAR EXCEL
         # ============================================
-        print("\n=== RESUMEN DE DATOS ===")
-        print(f"Lithium Carbonate: {len(df_lithium_carbonate)} registros")
-        print(f"Lithium Hydroxide: {len(df_lithium_hydroxide)} registros")
-        print(f"Lithium Metal: {len(df_lithium_metal)} registros")
-        print(f"Other Chemicals: {len(df_other)} registros")
-        print(f"Rare Earth Oxides: {len(df_rare_earth)} registros")
-        print("========================")
-        
         file_name = "Reporte_Diario.xlsx"
         
         engine = "xlsxwriter"
@@ -633,11 +549,9 @@ async def main():
         receiver = "market.intelligence@JGI.be"
         
         msg = EmailMessage()
-        
         msg["Subject"] = f"Price Tracking Data - {datetime.now().strftime('%d/%m/%Y')}"
         msg["From"] = sender
         msg["To"] = receiver
-        
         msg.set_content("Daily report.")
         
         with open(file_name, "rb") as f:
@@ -656,15 +570,12 @@ async def main():
             smtp.send_message(msg)
         
         await browser.close()
-        print("\n✅ Proceso completado exitosamente - Email enviado con datos")
+        print("\n✅ Proceso completado exitosamente")
         
     except Exception as e:
         print(f"❌ Error en el proceso: {e}")
         await browser.close()
         sys.exit(1)
 
-# ============================================
-# EJECUTAR
-# ============================================
 if __name__ == "__main__":
     asyncio.run(main())
