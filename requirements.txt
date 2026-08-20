@@ -4,3 +4,4 @@ pandas
 xlsxwriter
 openpyxl
 lxml
+playwright==1.40.0
