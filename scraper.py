@@ -64,43 +64,155 @@ async def realizar_login_playwright():
         print("✅ Clic en Sign In")
         await page.wait_for_timeout(3000)
         
-        # PASO 2: Llenar los campos
-        print("Llenando campos de login...")
+        # PASO 2: Esperar a que el popup esté visible y los campos existan
+        print("Esperando popup y campos...")
+        
+        # Esperar a que el contenedor del popup esté visible
+        try:
+            await page.wait_for_selector('#smm-auth-widget-root', state='visible', timeout=10000)
+            print("✅ Popup visible")
+        except:
+            print("⚠️ Popup no visible, forzando visibilidad...")
+            await page.evaluate("""
+                () => {
+                    const popup = document.querySelector('#smm-auth-widget-root');
+                    if (popup) {
+                        popup.style.display = 'block';
+                        popup.style.visibility = 'visible';
+                        popup.style.opacity = '1';
+                    }
+                }
+            """)
+            await page.wait_for_timeout(1000)
+        
+        # Verificar si los campos existen en el DOM normal
+        campos_en_dom = await page.evaluate("""
+            () => {
+                const user = document.querySelector('#_r_0_');
+                const pass = document.querySelector('#_r_2_');
+                return {
+                    user_exists: !!user,
+                    pass_exists: !!pass
+                };
+            }
+        """)
+        
+        print(f"Campos en DOM normal: {campos_en_dom}")
+        
+        # Si no existen en DOM normal, buscar en Shadow DOM
+        if not campos_en_dom.get('user_exists') or not campos_en_dom.get('pass_exists'):
+            print("Campos no encontrados en DOM normal, buscando en Shadow DOM...")
+            shadow_campos = await page.evaluate("""
+                () => {
+                    const host = document.querySelector('#smm-auth-widget-root');
+                    if (!host) return { user_exists: false, pass_exists: false };
+                    if (!host.shadowRoot) return { user_exists: false, pass_exists: false };
+                    const user = host.shadowRoot.querySelector('#_r_0_');
+                    const pass = host.shadowRoot.querySelector('#_r_2_');
+                    return {
+                        user_exists: !!user,
+                        pass_exists: !!pass
+                    };
+                }
+            """)
+            print(f"Campos en Shadow DOM: {shadow_campos}")
+            
+            # Si están en Shadow DOM, usar esa ruta para llenar
+            if shadow_campos.get('user_exists') and shadow_campos.get('pass_exists'):
+                print("Llenando campos desde Shadow DOM...")
+                llenado_shadow = await page.evaluate(f"""
+                    () => {{
+                        const host = document.querySelector('#smm-auth-widget-root');
+                        if (!host || !host.shadowRoot) return {{ success: false }};
+                        const shadow = host.shadowRoot;
+                        
+                        function llenarInput(element, value) {{
+                            if (!element) return false;
+                            element.focus();
+                            element.dispatchEvent(new Event('focus', {{ bubbles: true }}));
+                            element.select();
+                            element.value = value;
+                            ['input', 'change', 'blur'].forEach(ev => {{
+                                element.dispatchEvent(new Event(ev, {{ bubbles: true }}));
+                            }});
+                            const native = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                            native.call(element, value);
+                            element.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            return true;
+                        }}
+                        
+                        const userInput = shadow.querySelector('#_r_0_');
+                        const passInput = shadow.querySelector('#_r_2_');
+                        if (!userInput || !passInput) return {{ success: false }};
+                        
+                        const userOk = llenarInput(userInput, '{user}');
+                        const passOk = llenarInput(passInput, '{password}');
+                        
+                        // Habilitar y hacer clic en el botón
+                        const loginBtn = shadow.querySelector('button.smm-auth-submit');
+                        if (loginBtn) {{
+                            loginBtn.disabled = false;
+                            loginBtn.removeAttribute('disabled');
+                            loginBtn.click();
+                        }}
+                        
+                        return {{
+                            success: userOk && passOk,
+                            user_value: userInput.value,
+                            pass_value: passInput.value ? '****' : 'vacio'
+                        }};
+                    }}
+                """)
+                print(f"Resultado llenado Shadow DOM: {llenado_shadow}")
+                if llenado_shadow.get('success'):
+                    print("✅ Login enviado desde Shadow DOM")
+                    await page.wait_for_timeout(5000)
+                    # Verificar login
+                    await page.goto("https://www.metal.com/", wait_until="networkidle")
+                    await page.wait_for_timeout(5000)
+                    if "Sign Out" in await page.content():
+                        print("✅ LOGIN EXITOSO (Shadow DOM)")
+                        return page, browser, context
+                    else:
+                        print("⚠️ Login no confirmado después de Shadow DOM")
+                        await browser.close()
+                        return False
+                else:
+                    print("❌ Error llenando campos desde Shadow DOM")
+                    await browser.close()
+                    return False
+        
+        # Si los campos están en DOM normal, continuar con el método anterior
+        # (El código de llenado normal ya está arriba, pero lo pondré completo)
+        print("Llenando campos desde DOM normal...")
+        
+        # Esperar a que los campos estén disponibles
+        await page.wait_for_selector('#_r_0_', state='attached', timeout=10000)
+        await page.wait_for_selector('#_r_2_', state='attached', timeout=10000)
+        
+        await page.screenshot(path="screenshot_antes_llenar.png")
+        print("📸 Screenshot: screenshot_antes_llenar.png")
         
         llenar_campos = f"""
             (function() {{
                 function llenarInput(element, value) {{
                     if (!element) return false;
-                    
                     element.focus();
                     element.dispatchEvent(new Event('focus', {{ bubbles: true }}));
-                    
                     element.select();
                     element.value = value;
-                    
-                    const events = ['input', 'change', 'blur'];
-                    for (let eventType of events) {{
-                        const event = new Event(eventType, {{ bubbles: true }});
-                        element.dispatchEvent(event);
-                    }}
-                    
-                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                        window.HTMLInputElement.prototype, 'value'
-                    ).set;
-                    nativeInputValueSetter.call(element, value);
+                    ['input', 'change', 'blur'].forEach(ev => {{
+                        element.dispatchEvent(new Event(ev, {{ bubbles: true }}));
+                    }});
+                    const native = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                    native.call(element, value);
                     element.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    
-                    console.log(`Valor establecido: ${{value}}`);
                     return true;
                 }}
                 
                 const userInput = document.querySelector('#_r_0_');
                 const passInput = document.querySelector('#_r_2_');
-                
-                if (!userInput || !passInput) {{
-                    console.log('Campos no encontrados');
-                    return {{ success: false }};
-                }}
+                if (!userInput || !passInput) return {{ success: false }};
                 
                 const userOk = llenarInput(userInput, '{user}');
                 const passOk = llenarInput(passInput, '{password}');
@@ -121,87 +233,42 @@ async def realizar_login_playwright():
             await browser.close()
             return False
         
-        # Tomar screenshot para verificar campos
         await page.screenshot(path="screenshot_campos_llenados.png")
         print("📸 Screenshot: screenshot_campos_llenados.png")
         
-        # PASO 3: ENVIAR EL LOGIN - FORZAR CLICK EN EL BOTÓN REAL
+        # PASO 3: Enviar login (botón real)
         print("Enviando login...")
-        
-        # Buscar y hacer clic en el botón real smm-auth-submit
         click_result = await page.evaluate("""
             () => {
-                // Buscar el botón por su clase específica
                 const loginBtn = document.querySelector('button.smm-auth-submit');
-                if (!loginBtn) {
-                    console.log('Botón no encontrado');
-                    return 'button_not_found';
-                }
-                
-                console.log('Botón encontrado:', loginBtn);
-                
-                // Habilitar el botón (quitar disabled y aria-busy)
+                if (!loginBtn) return 'button_not_found';
                 loginBtn.disabled = false;
                 loginBtn.removeAttribute('disabled');
                 loginBtn.removeAttribute('aria-busy');
-                
-                // Forzar el clic de varias formas
-                // 1. Evento click nativo
                 loginBtn.click();
-                console.log('click() ejecutado');
-                
-                // 2. Disparar evento de clic manualmente
-                const event = new MouseEvent('click', {
-                    view: window,
-                    bubbles: true,
-                    cancelable: true
-                });
+                const event = new MouseEvent('click', { view: window, bubbles: true, cancelable: true });
                 loginBtn.dispatchEvent(event);
-                console.log('MouseEvent click disparado');
-                
-                // 3. Si el botón tiene un manejador de eventos en el atributo onclick
-                if (loginBtn.onclick) {
-                    loginBtn.onclick();
-                    console.log('onclick ejecutado');
-                }
-                
                 return 'click_sent';
             }
         """)
-        
         print(f"Resultado envío: {click_result}")
         
-        # Esperar procesamiento
-        print("Esperando procesamiento del login...")
         await page.wait_for_timeout(10000)
-        
-        # Tomar screenshot después del envío
         await page.screenshot(path="screenshot_despues_envio.png")
         print("📸 Screenshot: screenshot_despues_envio.png")
         
         # PASO 4: Verificar login
         print("Verificando login...")
-        
-        # Recargar la página principal
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(5000)
         await page.screenshot(path="screenshot_post_login.png")
         print("📸 Screenshot: screenshot_post_login.png")
         
-        # Verificar si hay elementos de usuario logueado
-        page_content = await page.content()
-        
-        if "Sign Out" in page_content or "Logout" in page_content:
+        if "Sign Out" in await page.content():
             print("✅ LOGIN EXITOSO - Usuario autenticado")
         else:
-            # Verificar cookies
             cookies = await context.cookies()
-            session_cookie = None
-            for cookie in cookies:
-                if any(key in cookie.get('name', '').lower() for key in ['session', 'auth', 'token', 'sid']):
-                    session_cookie = cookie
-                    break
-            
+            session_cookie = next((c for c in cookies if any(k in c['name'].lower() for k in ['session','auth','token','sid'])), None)
             if session_cookie:
                 print(f"✅ Cookie de sesión encontrada: {session_cookie.get('name')}")
             else:
@@ -211,13 +278,11 @@ async def realizar_login_playwright():
         
         # PASO 5: Verificar acceso a datos
         print("\n=== VERIFICANDO ACCESO A DATOS ===")
-        
         test_url = "https://www.metal.com/Lithium/201102250059"
         await page.goto(test_url, wait_until="networkidle")
         await page.wait_for_timeout(5000)
         
         page_content = await page.content()
-        
         if "Sign in to view" in page_content:
             print("❌ No se puede acceder a los datos - Pide autenticación")
             await browser.close()
