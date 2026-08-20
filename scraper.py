@@ -15,33 +15,8 @@ import subprocess
 import random
 from datetime import datetime
 
-def debug_login_page(driver):
-    """Guarda información de la página de login para debugging"""
-    print("=== DEBUG LOGIN PAGE ===")
-    # Guardar HTML
-    with open('login_page.html', 'w', encoding='utf-8') as f:
-        f.write(driver.page_source)
-    
-    # Mostrar todos los inputs
-    inputs = driver.find_elements(By.XPATH, "//input")
-    print(f"Total inputs encontrados: {len(inputs)}")
-    for i, inp in enumerate(inputs):
-        try:
-            print(f"Input {i}: type={inp.get_attribute('type')}, placeholder={inp.get_attribute('placeholder')}, id={inp.get_attribute('id')}, class={inp.get_attribute('class')}")
-        except:
-            pass
-    
-    # Mostrar todos los botones
-    botones = driver.find_elements(By.XPATH, "//button")
-    print(f"Total botones encontrados: {len(botones)}")
-    for i, btn in enumerate(botones):
-        try:
-            print(f"Botón {i}: text={btn.text}, type={btn.get_attribute('type')}, class={btn.get_attribute('class')}")
-        except:
-            pass
-    print("=== FIN DEBUG ===")
-
 ###----------------------------------------------------------------------> INICIO <----------------------------------------------------------------------###
+
 user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
@@ -72,529 +47,330 @@ time.sleep(random.uniform(1.5, 3.5))
 driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
-# Sign in
 # ============================================
-# LOGIN - FORZANDO APERTURA DEL POPUP
+# FUNCIÓN PARA LOGIN REAL CON SELENIUM
 # ============================================
-
-try:
-    print("=== INICIANDO PROCESO DE LOGIN ===")
+def realizar_login_real(driver, user, password):
+    """
+    Realiza el login real en la página usando Selenium
+    """
+    print("\n=== INICIANDO LOGIN REAL ===")
     
-    # ============================================
-    # PASO 1: Hacer clic en Sign In con JavaScript
-    # ============================================
-    print("Abriendo popup de login...")
-    
-    # Usar JavaScript para forzar el clic
-    driver.execute_script("""
-        // Buscar el botón Sign In de varias formas
-        let btn = document.querySelector('button.signInButton');
-        if (!btn) {
-            const buttons = document.querySelectorAll('button');
-            for (let b of buttons) {
-                if (b.textContent.includes('Sign In')) {
-                    btn = b;
-                    break;
-                }
-            }
-        }
-        if (btn) {
-            btn.click();
-            console.log('Clic en Sign In ejecutado');
-            
-            // También forzar la apertura del popup directamente
-            // Buscar el contenedor del popup
-            const popupContainer = document.querySelector('#smm-auth-widget-root');
-            if (popupContainer) {
-                popupContainer.style.display = 'block';
-                popupContainer.style.visibility = 'visible';
-                popupContainer.style.opacity = '1';
-                console.log('Popup forzado a mostrar');
-            }
-        }
-        return btn ? true : false;
-    """)
-    
-    print("✅ Clic en Sign In ejecutado con JavaScript")
-    time.sleep(3)
-    
-    # ============================================
-    # PASO 2: Forzar la visibilidad del popup
-    # ============================================
-    print("Forzando visibilidad del popup...")
-    
-    driver.execute_script("""
-        // Función para mostrar elementos ocultos
-        function makeVisible(element) {
-            if (!element) return;
-            element.style.display = 'block';
-            element.style.visibility = 'visible';
-            element.style.opacity = '1';
-            element.style.position = 'relative';
-            element.style.zIndex = '9999';
-            element.style.height = 'auto';
-            element.style.width = 'auto';
-            
-            // También mostrar todos los hijos
-            const children = element.querySelectorAll('*');
-            for (let child of children) {
-                child.style.display = 'block';
-                child.style.visibility = 'visible';
-                child.style.opacity = '1';
-            }
-        }
-        
-        // Buscar el popup de login
-        let popup = document.querySelector('#smm-auth-widget-root');
-        if (popup) {
-            makeVisible(popup);
-            console.log('Popup encontrado y visible');
-        }
-        
-        // Buscar también por clase
-        let popupByClass = document.querySelector('.smm-auth-shell');
-        if (popupByClass) {
-            makeVisible(popupByClass);
-            console.log('Popup encontrado por clase');
-        }
-        
-        // Buscar cualquier contenedor que contenga el formulario
-        const allDivs = document.querySelectorAll('div');
-        for (let div of allDivs) {
-            if (div.innerHTML && div.innerHTML.includes('_r_0_')) {
-                makeVisible(div);
-                console.log('Contenedor del formulario encontrado');
-                // También mostrar todos los padres
-                let parent = div.parentElement;
-                while (parent) {
-                    makeVisible(parent);
-                    parent = parent.parentElement;
-                }
-            }
-        }
-        
-        // Buscar específicamente el formulario
-        const forms = document.querySelectorAll('form');
-        for (let form of forms) {
-            if (form.innerHTML && form.innerHTML.includes('_r_0_')) {
-                makeVisible(form);
-                console.log('Formulario encontrado');
-            }
-        }
-    """)
-    
-    print("✅ Visibilidad forzada")
-    time.sleep(2)
-    
-    # ============================================
-    # PASO 3: Buscar los elementos por ID
-    # ============================================
-    print("Buscando elementos por ID...")
-    
-    input_user = None
-    input_pass = None
-    boton_login = None
-    
-    # Intentar encontrar los elementos por ID directamente
     try:
-        input_user = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.ID, "_r_0_"))
-        )
-        print("✅ Campo usuario encontrado por ID")
-    except Exception as e:
-        print(f"❌ No encontrado por ID: {e}")
-    
-    # Si no se encuentra, buscar con JavaScript
-    if not input_user:
-        print("Buscando con JavaScript...")
+        # PASO 1: Ir a la página principal
+        driver.get("https://www.metal.com/")
+        time.sleep(5)
+        print("✅ Página principal cargada")
         
-        result = driver.execute_script("""
-            // Buscar en todo el DOM
-            function findElements() {
-                // Buscar por ID
-                let user = document.getElementById('_r_0_');
-                let pass = document.getElementById('_r_2_');
-                
-                if (user && pass) {
-                    return { user: user, pass: pass };
-                }
-                
-                // Buscar en todo el DOM
-                const allInputs = document.querySelectorAll('input');
-                for (let inp of allInputs) {
-                    if (inp.id === '_r_0_') {
-                        user = inp;
-                    }
-                    if (inp.id === '_r_2_') {
-                        pass = inp;
-                    }
-                }
-                
-                if (user && pass) {
-                    return { user: user, pass: pass };
-                }
-                
-                // Buscar por placeholder
-                for (let inp of allInputs) {
-                    const placeholder = inp.getAttribute('placeholder');
-                    if (placeholder && placeholder.includes('Email')) {
-                        user = inp;
-                    }
-                    if (placeholder && placeholder.includes('Password')) {
-                        pass = inp;
-                    }
-                }
-                
-                return { user: user, pass: pass };
-            }
-            
-            const result = findElements();
-            
-            // Forzar visibilidad de los elementos encontrados
-            if (result.user) {
-                result.user.style.display = 'block';
-                result.user.style.visibility = 'visible';
-                result.user.style.opacity = '1';
-                // Scroll al elemento
-                result.user.scrollIntoView({behavior: 'smooth', block: 'center'});
-            }
-            if (result.pass) {
-                result.pass.style.display = 'block';
-                result.pass.style.visibility = 'visible';
-                result.pass.style.opacity = '1';
-                result.pass.scrollIntoView({behavior: 'smooth', block: 'center'});
-            }
-            
-            return result;
-        """)
+        # PASO 2: Buscar y hacer clic en el botón "Sign In"
+        print("Buscando botón Sign In...")
+        boton_signin = None
         
-        if result:
-            input_user = result.get('user')
-            input_pass = result.get('pass')
-            if input_user and input_pass:
-                print("✅ Elementos encontrados con JavaScript")
-            else:
-                print("❌ No se encontraron elementos con JavaScript")
-    
-    # ============================================
-    # PASO 4: Buscar el botón de login
-    # ============================================
-    if input_user and input_pass:
-        print("Buscando botón de login...")
+        # Intentar múltiples selectores
+        selectores = [
+            "//button[contains(text(), 'Sign In')]",
+            "//button[contains(@class, 'signInButton')]",
+            "//a[contains(text(), 'Sign In')]",
+            "//*[contains(@class, 'signInButton')]"
+        ]
         
-        try:
-            boton_login = driver.find_element(By.CSS_SELECTOR, "button.smm-auth-submit")
-            print("✅ Botón encontrado por CSS")
-        except:
+        for selector in selectores:
             try:
-                boton_login = driver.find_element(By.XPATH, "//button[contains(@class, 'smm-auth-submit')]")
-                print("✅ Botón encontrado por clase")
+                boton_signin = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH, selector))
+                )
+                if boton_signin:
+                    print(f"✅ Botón Sign In encontrado con selector: {selector}")
+                    break
             except:
+                continue
+        
+        if not boton_signin:
+            # Intentar con JavaScript
+            boton_signin = driver.execute_script("""
+                const btn = document.querySelector('button.signInButton');
+                if (btn) return btn;
+                const buttons = document.querySelectorAll('button');
+                for (let b of buttons) {
+                    if (b.textContent.includes('Sign In')) return b;
+                }
+                return null;
+            """)
+        
+        if boton_signin:
+            # Hacer clic con JavaScript para evitar problemas
+            driver.execute_script("arguments[0].click();", boton_signin)
+            print("✅ Clic en Sign In ejecutado")
+            time.sleep(3)
+        else:
+            raise Exception("No se encontró el botón Sign In")
+        
+        # PASO 3: Esperar a que aparezca el popup de login
+        print("Esperando popup de login...")
+        time.sleep(5)
+        
+        # Buscar el iframe del login (si existe)
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        print(f"Iframes encontrados: {len(iframes)}")
+        
+        # Buscar en cada iframe
+        input_user = None
+        input_pass = None
+        boton_login = None
+        
+        for i, iframe in enumerate(iframes):
+            try:
+                print(f"Probando iframe {i}...")
+                driver.switch_to.frame(iframe)
+                
+                # Buscar inputs dentro del iframe
+                inputs = driver.find_elements(By.XPATH, "//input")
+                print(f"  Inputs en iframe {i}: {len(inputs)}")
+                
+                for inp in inputs:
+                    try:
+                        inp_id = inp.get_attribute('id')
+                        if inp_id == '_r_0_':
+                            input_user = inp
+                            print(f"  ✅ Campo usuario encontrado en iframe {i}")
+                        elif inp_id == '_r_2_':
+                            input_pass = inp
+                            print(f"  ✅ Campo contraseña encontrado en iframe {i}")
+                    except:
+                        pass
+                
+                if input_user and input_pass:
+                    break
+                    
+            except Exception as e:
+                print(f"Error con iframe {i}: {e}")
+            finally:
+                if not (input_user and input_pass):
+                    try:
+                        driver.switch_to.default_content()
+                    except:
+                        pass
+        
+        # Si no se encontraron en iframes, buscar en el DOM principal
+        if not input_user or not input_pass:
+            print("Buscando en DOM principal...")
+            driver.switch_to.default_content()
+            
+            # Buscar inputs en el DOM principal
+            inputs = driver.find_elements(By.XPATH, "//input")
+            print(f"Inputs en DOM principal: {len(inputs)}")
+            
+            for inp in inputs:
                 try:
-                    boton_login = driver.execute_script("""
-                        const btn = document.querySelector('button.smm-auth-submit');
-                        if (btn) {
-                            btn.style.display = 'block';
-                            btn.style.visibility = 'visible';
-                            btn.style.opacity = '1';
-                            btn.disabled = false;
-                            btn.scrollIntoView({behavior: 'smooth', block: 'center'});
-                            return btn;
-                        }
-                        return null;
-                    """)
-                    if boton_login:
-                        print("✅ Botón encontrado con JavaScript")
+                    inp_id = inp.get_attribute('id')
+                    if inp_id == '_r_0_':
+                        input_user = inp
+                        print("✅ Campo usuario encontrado en DOM principal")
+                    elif inp_id == '_r_2_':
+                        input_pass = inp
+                        print("✅ Campo contraseña encontrado en DOM principal")
                 except:
                     pass
-    
-    # ============================================
-    # PASO 5: Si aún no se encuentra, intentar con el HTML directo
-    # ============================================
-    if not input_user:
-        print("\n🔄 Último intento: Usar el HTML directamente...")
         
-        # El HTML que compartiste tiene los elementos, usamos JavaScript para recrearlos
-        driver.execute_script("""
-            // Crear los elementos de login si no existen
-            if (!document.getElementById('_r_0_')) {
-                console.log('Creando elementos de login...');
-                
-                // Crear contenedor
-                const container = document.createElement('div');
-                container.id = 'login-container';
-                container.style.position = 'fixed';
-                container.style.top = '50%';
-                container.style.left = '50%';
-                container.style.transform = 'translate(-50%, -50%)';
-                container.style.zIndex = '99999';
-                container.style.backgroundColor = 'white';
-                container.style.padding = '30px';
-                container.style.borderRadius = '8px';
-                container.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
-                
-                // Crear campo usuario
-                const userLabel = document.createElement('label');
-                userLabel.textContent = 'Email address or phone number';
-                userLabel.style.display = 'block';
-                userLabel.style.marginBottom = '5px';
-                container.appendChild(userLabel);
-                
-                const userInput = document.createElement('input');
-                userInput.id = '_r_0_';
-                userInput.type = 'text';
-                userInput.placeholder = 'Email or phone';
-                userInput.style.width = '100%';
-                userInput.style.padding = '10px';
-                userInput.style.marginBottom = '15px';
-                userInput.style.border = '1px solid #ccc';
-                userInput.style.borderRadius = '4px';
-                container.appendChild(userInput);
-                
-                // Crear campo contraseña
-                const passLabel = document.createElement('label');
-                passLabel.textContent = 'Password';
-                passLabel.style.display = 'block';
-                passLabel.style.marginBottom = '5px';
-                container.appendChild(passLabel);
-                
-                const passInput = document.createElement('input');
-                passInput.id = '_r_2_';
-                passInput.type = 'password';
-                passInput.placeholder = 'Password';
-                passInput.style.width = '100%';
-                passInput.style.padding = '10px';
-                passInput.style.marginBottom = '15px';
-                passInput.style.border = '1px solid #ccc';
-                passInput.style.borderRadius = '4px';
-                container.appendChild(passInput);
-                
-                // Crear botón
-                const submitBtn = document.createElement('button');
-                submitBtn.id = 'login-submit';
-                submitBtn.textContent = 'Sign In';
-                submitBtn.style.width = '100%';
-                submitBtn.style.padding = '10px';
-                submitBtn.style.backgroundColor = '#d7000f';
-                submitBtn.style.color = 'white';
-                submitBtn.style.border = 'none';
-                submitBtn.style.borderRadius = '4px';
-                submitBtn.style.cursor = 'pointer';
-                submitBtn.style.fontSize = '16px';
-                container.appendChild(submitBtn);
-                
-                document.body.appendChild(container);
-                console.log('Elementos de login creados');
-            }
-        """)
+        if not input_user or not input_pass:
+            raise Exception("No se encontraron los campos de login")
         
-        time.sleep(1)
+        # PASO 4: Ingresar credenciales
+        print("Ingresando credenciales...")
         
-        # Buscar los elementos recién creados
+        # Limpiar y escribir usuario
         try:
-            input_user = driver.find_element(By.ID, "_r_0_")
-            input_pass = driver.find_element(By.ID, "_r_2_")
-            boton_login = driver.find_element(By.ID, "login-submit")
-            print("✅ Elementos creados y encontrados")
-        except Exception as e:
-            print(f"❌ Error al encontrar elementos creados: {e}")
-    
-    # ============================================
-    # VERIFICAR FINAL
-    # ============================================
-    if not input_user or not input_pass:
-        print("\n=== ERROR FATAL: No se encontraron los elementos ===")
-        with open('debug_final_completo.html', 'w', encoding='utf-8') as f:
-            f.write(driver.page_source)
-        driver.save_screenshot('debug_final_screenshot.png')
-        raise Exception("No se pudo encontrar el campo de usuario después de todos los intentos")
-    
-    # ============================================
-    # INGRESAR CREDENCIALES
-    # ============================================
-    print("\n--- Ingresando credenciales ---")
-    
-    # Ingresar usuario
-    try:
-        input_user.clear()
-        input_user.send_keys(user)
-        print("✅ Usuario ingresado")
-    except:
-        driver.execute_script(f"arguments[0].value = '{user}';", input_user)
-        print("✅ Usuario ingresado con JavaScript")
-    
-    # Ingresar contraseña
-    try:
-        input_pass.clear()
-        input_pass.send_keys(password)
-        print("✅ Contraseña ingresada")
-    except:
-        driver.execute_script(f"arguments[0].value = '{password}';", input_pass)
-        print("✅ Contraseña ingresada con JavaScript")
-    
-    # Hacer clic en el botón
-    if boton_login:
-        try:
-            driver.execute_script("arguments[0].disabled = false;", boton_login)
-            boton_login.click()
-            print("✅ Login enviado")
+            input_user.clear()
+            input_user.send_keys(user)
+            print("✅ Usuario ingresado")
         except:
-            driver.execute_script("arguments[0].click();", boton_login)
-            print("✅ Login enviado con JavaScript")
-    else:
-        # Si no hay botón, intentar enviar el formulario
+            driver.execute_script(f"arguments[0].value = '{user}';", input_user)
+            print("✅ Usuario ingresado con JavaScript")
+        
+        # Limpiar y escribir contraseña
         try:
-            driver.execute_script("""
-                const form = document.querySelector('form');
-                if (form) {
-                    form.submit();
-                    return true;
-                }
-                return false;
-            """)
-            print("✅ Formulario enviado")
+            input_pass.clear()
+            input_pass.send_keys(password)
+            print("✅ Contraseña ingresada")
+        except:
+            driver.execute_script(f"arguments[0].value = '{password}';", input_pass)
+            print("✅ Contraseña ingresada con JavaScript")
+        
+        # PASO 5: Buscar y hacer clic en el botón de login
+        print("Buscando botón de login...")
+        
+        # Buscar en el iframe actual o en el DOM principal
+        try:
+            boton_login = driver.find_element(By.XPATH, "//button[contains(@class, 'smm-auth-submit')]")
+            print("✅ Botón login encontrado por clase")
+        except:
+            try:
+                boton_login = driver.find_element(By.XPATH, "//button[@type='submit']")
+                print("✅ Botón login encontrado por tipo submit")
+            except:
+                try:
+                    boton_login = driver.find_element(By.XPATH, "//button[contains(text(), 'Sign In')]")
+                    print("✅ Botón login encontrado por texto")
+                except:
+                    # Buscar cualquier botón visible
+                    botones = driver.find_elements(By.XPATH, "//button")
+                    for btn in botones:
+                        if btn.is_displayed() and btn.is_enabled():
+                            boton_login = btn
+                            print(f"✅ Botón login encontrado: {btn.text}")
+                            break
+        
+        if boton_login:
+            # Habilitar el botón si está deshabilitado
+            driver.execute_script("arguments[0].disabled = false;", boton_login)
+            time.sleep(1)
+            
+            # Hacer clic en el botón
+            driver.execute_script("arguments[0].click();", boton_login)
+            print("✅ Login enviado")
+        else:
+            # Si no hay botón, intentar enviar el formulario
+            try:
+                driver.execute_script("""
+                    const form = document.querySelector('form');
+                    if (form) {
+                        form.submit();
+                        return true;
+                    }
+                    return false;
+                """)
+                print("✅ Formulario enviado")
+            except:
+                pass
+        
+        # PASO 6: Esperar a que el login se procese
+        print("Esperando procesamiento del login...")
+        time.sleep(8)
+        
+        # PASO 7: Verificar si el login fue exitoso
+        driver.switch_to.default_content()
+        
+        # Recargar la página para verificar
+        driver.get("https://www.metal.com/")
+        time.sleep(5)
+        
+        # Verificar si hay elementos de usuario logueado
+        elementos_logout = driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out') or contains(text(), 'Logout') or contains(text(), 'My Account')]")
+        
+        if elementos_logout:
+            print("✅ LOGIN EXITOSO - Usuario autenticado")
+            return True
+        else:
+            print("⚠️ No se pudo confirmar el login")
+            # Verificar si hay cookies de sesión
+            cookies = driver.get_cookies()
+            print(f"Cookies: {len(cookies)}")
+            for cookie in cookies:
+                print(f"  {cookie.get('name')}: {cookie.get('value')[:20]}...")
+            
+            # Si no hay mensaje de error pero tampoco confirmación, asumir éxito
+            print("ℹ️ No se pudo confirmar, pero continuando...")
+            return True
+            
+    except Exception as e:
+        print(f"❌ Error en el login: {str(e)}")
+        try:
+            driver.save_screenshot("error_login_completo.png")
+            with open('error_login_completo.html', 'w', encoding='utf-8') as f:
+                f.write(driver.page_source)
         except:
             pass
-    
-    # Esperar a que cargue
-    time.sleep(5)
-    
-    # Verificar login
-    try:
-        page_source = driver.page_source
-        if 'Sign Out' in page_source or 'Logout' in page_source:
-            print("✅ Login exitoso")
-        else:
-            print("⚠️ Verificar login manualmente")
-    except:
-        pass
-    
-    print("✅ Proceso de login completado")
+        return False
 
-    # ============================================
-    # POST-LOGIN: LIMPIEZA Y RECARGA COMPLETA
-    # ============================================
-    print("\n--- Preparando para scraping ---")
-    
-    # PASO 1: Eliminar elementos artificiales
-    try:
-        driver.execute_script("""
-            const container = document.getElementById('login-container');
-            if (container) {
-                container.remove();
-                console.log('Elementos artificiales eliminados');
-            }
-        """)
-        print("✅ Elementos artificiales eliminados")
-    except:
-        pass
-    
-    # PASO 2: Volver al contexto principal
-    try:
-        driver.switch_to.default_content()
-        print("✅ Contexto principal restaurado")
-    except:
-        pass
-    
-    # PASO 3: Limpiar cookies y caché para asegurar estado limpio
-    print("Limpiando estado del navegador...")
-    try:
-        driver.delete_all_cookies()
-        print("✅ Cookies eliminadas")
-    except:
-        pass
-    
-    # PASO 4: Navegar a la página principal y esperar
-    print("Navegando a la página principal...")
+# ============================================
+# EJECUTAR LOGIN
+# ============================================
+login_exitoso = realizar_login_real(driver, user, password)
+
+if not login_exitoso:
+    print("❌ El login falló. Intentando método alternativo...")
+    # Intentar nuevamente con otro enfoque
     driver.get("https://www.metal.com/")
     time.sleep(5)
+    # Continuar de todas formas, pero con advertencia
+
+# ============================================
+# VERIFICACIÓN DE AUTENTICACIÓN
+# ============================================
+print("\n=== VERIFICANDO AUTENTICACIÓN ===")
+
+# Intentar acceder a una página de precios
+test_url = "https://www.metal.com/Lithium/201102250059"
+driver.get(test_url)
+time.sleep(5)
+
+# Verificar si se puede ver el precio o pide login
+page_source = driver.page_source
+
+if "Sign in to view" in page_source or "sign in to view" in page_source.lower():
+    print("❌ El login NO fue exitoso - La página sigue pidiendo autenticación")
+    print("Intentando refrescar...")
     
-    # PASO 5: Verificar si el login fue exitoso
-    try:
-        # Buscar elementos que indiquen que estamos logueados
-        elementos_logout = driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out') or contains(text(), 'Logout')]")
-        if elementos_logout:
-            print("✅ Confirmado: Usuario logueado correctamente")
-        else:
-            print("⚠️ No se pudo confirmar el login, pero continuando...")
-    except:
-        pass
-    
-    # PASO 6: Recargar para asegurar que la página esté en estado correcto
-    print("Recargando página...")
+    # Intentar refrescar la página después del login
+    driver.get("https://www.metal.com/")
+    time.sleep(3)
     driver.refresh()
     time.sleep(5)
     
-    print("✅ Página preparada para scraping")
+    # Verificar nuevamente
+    driver.get(test_url)
+    time.sleep(5)
+    page_source = driver.page_source
+    
+    if "Sign in to view" in page_source:
+        print("❌ El login sigue sin funcionar. Continuando con scraping limitado...")
+    else:
+        print("✅ Login exitoso después de refrescar")
+else:
+    print("✅ El login fue exitoso - Se puede ver la información")
 
-except Exception as e:
-    print(f"Error en el proceso de login: {str(e)}")
-    try:
-        driver.save_screenshot("error_login_completo.png")
-        with open('error_html_completo.html', 'w', encoding='utf-8') as f:
-            f.write(driver.page_source)
-        print("Archivos de debug guardados")
-    except:
-        pass
-    raise
-
-time.sleep(random.uniform(8, 14))
-
-wait = WebDriverWait(driver,10)
+time.sleep(random.uniform(3, 5))
 
 # =========================
-# FUNCIONES
+# FUNCIONES DE SCRAPING
 # =========================
 
 def page_not_found(driver):
     """Verifica si la página existe y tiene datos"""
     try:
-        # Esperar un poco para que cargue
         time.sleep(2)
         
         # Buscar indicadores de que la página tiene datos
-        # Buscar por las clases que sabemos que funcionaban
         elementos = driver.find_elements(By.XPATH, '//div[contains(@class, "__PriceWrap")]')
         if elementos:
-            print(f"  Encontrado __PriceWrap: {len(elementos)} elementos")
             return False
         
-        # Buscar por el contenedor alternativo
         elementos = driver.find_elements(By.XPATH, '//div[contains(@class, "PriceWrap")]')
         if elementos:
-            print(f"  Encontrado PriceWrap: {len(elementos)} elementos")
             return False
         
-        # Si no hay elementos de precio, verificar si hay mensaje de error
-        mensaje_error = driver.find_elements(By.XPATH, '//*[contains(text(), "404") or contains(text(), "Not Found") or contains(text(), "no encontrado")]')
+        mensaje_error = driver.find_elements(By.XPATH, '//*[contains(text(), "404") or contains(text(), "Not Found")]')
         if mensaje_error:
-            print("  Página no encontrada")
             return True
         
-        # Si no hay elementos de precio y no hay mensaje de error, asumimos que no hay datos
-        print("  No se encontraron elementos de precio")
         return True
-        
-    except Exception as e:
-        print(f"  Error en page_not_found: {e}")
+    except:
         return True
 
 def extract_price_data(driver, url):
-    """Extrae datos de precio de una URL - Versión con los selectores originales"""
+    """Extrae datos de precio de una URL"""
     try:
         print(f"\n🔍 Extrayendo datos de: {url}")
         
-        # Navegar a la URL
         driver.get(url)
-        print(f"  Navegando a {url}")
         time.sleep(5)
         
-        # Verificar si la página existe
         if page_not_found(driver):
             print(f"⚠️ Página no encontrada o sin datos: {url}")
             return None, None
         
-        # Esperar a que el contenedor esté presente
+        # Buscar contenedor
+        container = None
         try:
             container = WebDriverWait(driver, 15).until(
                 EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "__PriceWrap")]'))
@@ -602,29 +378,24 @@ def extract_price_data(driver, url):
             print("  ✅ Contenedor __PriceWrap encontrado")
         except:
             try:
-                # Intentar con el selector alternativo
                 container = WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "PriceWrap")]'))
                 )
                 print("  ✅ Contenedor PriceWrap encontrado")
             except Exception as e:
-                print(f"  ❌ No se encontró contenedor de precios: {e}")
-                # Guardar HTML para debug
-                with open(f'debug_no_container_{url.split("/")[-1]}.html', 'w', encoding='utf-8') as f:
-                    f.write(driver.page_source)
+                print(f"  ❌ No se encontró contenedor: {e}")
                 return None, None
         
         # Extraer precio promedio
         first_price = None
         try:
-            # Usar el selector original
             price_element = container.find_element(By.XPATH, './/div[contains(@class,"avg")]')
             first_price = price_element.text.strip()
             print(f"  ✅ Precio promedio: {first_price}")
         except Exception as e:
-            print(f"  ❌ Error extrayendo precio promedio: {e}")
+            print(f"  ❌ Error extrayendo precio: {e}")
         
-        # Extraer rango de precios
+        # Extraer rango
         high = None
         low = None
         try:
@@ -632,47 +403,32 @@ def extract_price_data(driver, url):
             high = high_element.text.strip()
             print(f"  ✅ High: {high}")
         except:
-            print("  ⚠️ No se encontró High")
+            pass
         
         try:
             low_element = container.find_element(By.XPATH, './/div[contains(@class,"list")]/div[2]/label[2]')
             low = low_element.text.strip()
             print(f"  ✅ Low: {low}")
         except:
-            print("  ⚠️ No se encontró Low")
+            pass
         
-        # Formatear rango
         price_range = None
         if low is not None and high is not None:
             price_range = f"{low}-{high}"
-            print(f"  ✅ Rango de precios: {price_range}")
-        else:
-            # Si no hay rango, usar el precio promedio
-            if first_price:
-                price_range = first_price
-                print(f"  ℹ️ Usando precio promedio como rango: {price_range}")
-        
-        if first_price:
-            print(f"  ✅ Datos extraídos exitosamente")
-        else:
-            print(f"  ❌ No se pudo extraer el precio")
+            print(f"  ✅ Rango: {price_range}")
+        elif first_price:
+            price_range = first_price
         
         return first_price, price_range
         
     except Exception as e:
-        print(f"❌ Error extrayendo datos de {url}: {str(e)}")
-        try:
-            driver.save_screenshot(f"error_price_{url.split('/')[-1]}.png")
-            with open(f'error_html_{url.split("/")[-1]}.html', 'w', encoding='utf-8') as f:
-                f.write(driver.page_source)
-        except:
-            pass
+        print(f"❌ Error en {url}: {str(e)}")
         return None, None
 
 # =========================
 # LITHIUM CARBONATE
 # =========================
-
+print("\n--- Extrayendo Lithium Carbonate ---")
 urls_carbonate = ["https://www.metal.com/Lithium/201102250059",
                   "https://www.metal.com/Lithium/202306050001",
                   "https://www.metal.com/Lithium/202212050001",
@@ -690,16 +446,17 @@ cols_carbonate = ["Battery-Grade Lithium Carbonate Price",
 data_carbonate = []
 
 for url in urls_carbonate:
-    price, range_price = extract_price_data(driver,url)
-    data_carbonate.append(price)
-    data_carbonate.append(range_price)
+    price, range_price = extract_price_data(driver, url)
+    data_carbonate.append(price if price else "N/A")
+    data_carbonate.append(range_price if range_price else "N/A")
+    time.sleep(2)
 
 df_lithium_carbonate = pd.DataFrame([data_carbonate], columns=cols_carbonate)
 
 # =========================
 # LITHIUM HYDROXIDE
 # =========================
-
+print("\n--- Extrayendo Lithium Hydroxide ---")
 urls_hydroxide = ["https://www.metal.com/Lithium/201102250281",
                   "https://www.metal.com/Lithium/202106020003",
                   "https://www.metal.com/Lithium/202107020004",
@@ -720,16 +477,17 @@ cols_hydroxide = ["Battery-Grade Lithium Hydroxide (Coarse Particles) Price",
 data_hydroxide = []
 
 for url in urls_hydroxide:
-    price, range_price = extract_price_data(driver,url)
-    data_hydroxide.append(price)
-    data_hydroxide.append(range_price)
+    price, range_price = extract_price_data(driver, url)
+    data_hydroxide.append(price if price else "N/A")
+    data_hydroxide.append(range_price if range_price else "N/A")
+    time.sleep(2)
 
 df_lithium_hydroxide = pd.DataFrame([data_hydroxide], columns=cols_hydroxide)
 
 # =========================
 # LITHIUM METAL
 # =========================
-
+print("\n--- Extrayendo Lithium Metal ---")
 urls_metal = ["https://www.metal.com/Lithium/202304250001",
               "https://www.metal.com/Lithium/202304250002"]
 
@@ -741,16 +499,17 @@ cols_metal = ["Industrial-Grade Lithium Metal (Weekly) Price",
 data_metal = []
 
 for url in urls_metal:
-    price, range_price = extract_price_data(driver,url)
-    data_metal.append(price)
-    data_metal.append(range_price)
+    price, range_price = extract_price_data(driver, url)
+    data_metal.append(price if price else "N/A")
+    data_metal.append(range_price if range_price else "N/A")
+    time.sleep(2)
 
 df_lithium_metal = pd.DataFrame([data_metal], columns=cols_metal)
 
 # =========================
 # OTHER CHEMICALS
 # =========================
-
+print("\n--- Extrayendo Other Chemicals ---")
 urls_other = ["https://www.metal.com/Lithium/202110220001",
               "https://www.metal.com/Lithium/202307040006"]
 
@@ -762,21 +521,21 @@ cols_other = ["LiPF6 (Domestic) Price",
 data_other = []
 
 for url in urls_other:
-    price, range_price = extract_price_data(driver,url)
-    data_other.append(price)
-    data_other.append(range_price)
+    price, range_price = extract_price_data(driver, url)
+    data_other.append(price if price else "N/A")
+    data_other.append(range_price if range_price else "N/A")
+    time.sleep(2)
 
 df_other = pd.DataFrame([data_other], columns=cols_other)
-
-del (cols_carbonate, cols_hydroxide, cols_metal, cols_other, data_carbonate, data_hydroxide, data_metal, data_other, price, range_price, url, urls_carbonate, urls_hydroxide, urls_metal, urls_other)
 
 # =========================
 # RARE EARTH OXIDES
 # =========================
-
+print("\n--- Extrayendo Rare Earth Oxides ---")
 driver.get("https://www.metal.com/Rare-Earth-Oxides")
-wait.until(EC.presence_of_element_located((By.CSS_SELECTOR,".ant-table-content table")))
-table = driver.find_element(By.CSS_SELECTOR,".ant-table-content table")
+wait = WebDriverWait(driver, 10)
+wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".ant-table-content table")))
+table = driver.find_element(By.CSS_SELECTOR, ".ant-table-content table")
 df_rare_earth = pd.read_html(StringIO(table.get_attribute("outerHTML")))[0]
 df_rare_earth['Name'] = df_rare_earth['Name'].str.replace(r'SMM.*$', '', regex=True).str.strip()
 df_rare_earth = df_rare_earth.rename(columns={
@@ -784,7 +543,16 @@ df_rare_earth = df_rare_earth.rename(columns={
     "Average": "Avg."
 })
 
-driver.quit()
+# ============================================
+# RESULTADOS Y GUARDADO
+# ============================================
+print("\n=== RESUMEN DE DATOS ===")
+print(f"Lithium Carbonate: {len(df_lithium_carbonate)} registros")
+print(f"Lithium Hydroxide: {len(df_lithium_hydroxide)} registros")
+print(f"Lithium Metal: {len(df_lithium_metal)} registros")
+print(f"Other Chemicals: {len(df_other)} registros")
+print(f"Rare Earth Oxides: {len(df_rare_earth)} registros")
+print("========================")
 
 file_name = "Reporte_Diario.xlsx"
 
@@ -794,8 +562,6 @@ try:
 except ImportError:
     engine = "openpyxl"
 
-engine = "xlsxwriter"
-
 with pd.ExcelWriter(file_name, engine=engine) as writer:
 
     df_lithium_carbonate.to_excel(writer, sheet_name="Lithium carbonate", index=False)
@@ -804,7 +570,7 @@ with pd.ExcelWriter(file_name, engine=engine) as writer:
     df_other.to_excel(writer, sheet_name="Other", index=False)
     df_rare_earth.to_excel(writer, sheet_name="REO", index=False)
 
-    workbook  = writer.book
+    workbook = writer.book
 
     dfs = [
         ("Lithium carbonate", df_lithium_carbonate, "LC_Data"),
@@ -826,26 +592,11 @@ with pd.ExcelWriter(file_name, engine=engine) as writer:
             }
         )
 
-# ============================================
-# VERIFICACIÓN FINAL Y LIMPIEZA
-# ============================================
-print("\n--- Finalizando scraping ---")
-
-# Mostrar resumen de datos extraídos
-print("\n=== RESUMEN DE DATOS ===")
-print(f"Lithium Carbonate: {len(df_lithium_carbonate)} registros")
-print(f"Lithium Hydroxide: {len(df_lithium_hydroxide)} registros")
-print(f"Lithium Metal: {len(df_lithium_metal)} registros")
-print(f"Other Chemicals: {len(df_other)} registros")
-print(f"Rare Earth Oxides: {len(df_rare_earth)} registros")
-print("========================")
-
-# Verificar si hay datos vacíos
-if df_lithium_carbonate.empty and df_lithium_hydroxide.empty and df_lithium_metal.empty:
-    print("⚠️ ADVERTENCIA: No se extrajeron datos. Verificar el scraping.")
-    
+# =========================
+# ENVIAR EMAIL
+# =========================
 sender = os.environ["EMAIL_USER"]
-password = os.environ["EMAIL_PASS"]
+password_email = os.environ["EMAIL_PASS"]
 receiver = "market.intelligence@JGI.be"
 
 msg = EmailMessage()
@@ -868,5 +619,8 @@ msg.add_attachment(
 )
 
 with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-    smtp.login(sender, password)
+    smtp.login(sender, password_email)
     smtp.send_message(msg)
+
+driver.quit()
+print("\n✅ Proceso completado exitosamente")
