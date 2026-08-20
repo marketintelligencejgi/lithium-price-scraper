@@ -15,170 +15,328 @@ user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
 async def realizar_login_playwright():
-    """Realiza el login usando Playwright accediendo directamente al Shadow DOM"""
+    """Realiza el login usando Playwright con detección automática de headless"""
     
     print("\n=== INICIANDO LOGIN CON PLAYWRIGHT ===")
     
+    # DETECTAR SI ESTAMOS EN HEADLESS O NO
+    # En GitHub Actions siempre es headless
+    is_headless = True
+    
     async with async_playwright() as p:
-        # Lanzar navegador en modo headless
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
+        # Configuración para headless
+        launch_options = {
+            'headless': is_headless,
+            'args': [
                 '--no-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-blink-features=AutomationControlled',
                 '--disable-gpu',
                 '--disable-extensions',
-                '--disable-setuid-sandbox'
+                '--disable-setuid-sandbox',
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-site-isolation-trials',
+                '--disable-features=BlockInsecurePrivateNetworkRequests',
+                '--disable-features=OutOfBlinkCors',
+                '--disable-blink-features=AutomationControlled',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--disable-component-extensions-with-background-pages',
+                '--disable-default-apps',
+                '--disable-sync',
+                '--disable-translate',
+                '--metrics-recording-only',
+                '--no-first-run',
+                '--safebrowsing-disable-auto-update',
+                '--enable-automation',
+                '--password-store=basic',
+                '--use-mock-keychain'
             ]
-        )
+        }
         
-        # Crear contexto con user-agent real
+        # Si estamos en headless, añadir más opciones
+        if is_headless:
+            launch_options['args'].append('--window-size=1920,1080')
+        
+        # Lanzar navegador
+        browser = await p.chromium.launch(**launch_options)
+        
+        # Crear contexto con user-agent real y configuraciones anti-detección
         context = await browser.new_context(
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            viewport={'width': 1920, 'height': 1080}
+            viewport={'width': 1920, 'height': 1080},
+            locale='en-US',
+            timezone_id='America/New_York',
+            permissions=['geolocation'],
+            device_scale_factor=1,
+            has_touch=False,
+            is_mobile=False,
+            extra_http_headers={
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1'
+            }
         )
         
         # Crear página
         page = await context.new_page()
         
         # Configurar timeout
-        page.set_default_timeout(30000)
+        page.set_default_timeout(60000)
         
         print("Cargando página principal...")
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(3000)
         
-        # PASO 1: Hacer clic en Sign In
+        # Tomar screenshot inicial para debug
+        await page.screenshot(path="pagina_inicial.png")
+        
+        # PASO 1: Hacer clic en Sign In de múltiples formas
         print("Buscando botón Sign In...")
+        
+        sign_in_clicked = False
+        
+        # Método 1: Clic normal
         try:
             await page.wait_for_selector("button:has-text('Sign In')", state="visible", timeout=10000)
             await page.click("button:has-text('Sign In')")
-            print("✅ Clic en Sign In")
-            await page.wait_for_timeout(3000)
+            print("✅ Clic en Sign In (Método 1)")
+            sign_in_clicked = True
         except Exception as e:
-            print(f"❌ Error al hacer clic en Sign In: {e}")
+            print(f"⚠️ Método 1 falló: {e}")
+        
+        # Método 2: JavaScript
+        if not sign_in_clicked:
+            try:
+                await page.evaluate("""
+                    () => {
+                        const buttons = document.querySelectorAll('button');
+                        for (let btn of buttons) {
+                            if (btn.textContent.includes('Sign In')) {
+                                btn.click();
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                """)
+                print("✅ Clic en Sign In (Método 2 - JavaScript)")
+                sign_in_clicked = True
+            except Exception as e:
+                print(f"⚠️ Método 2 falló: {e}")
+        
+        if not sign_in_clicked:
+            print("❌ No se pudo hacer clic en Sign In")
             await browser.close()
             return False
         
-        # PASO 2: ACCEDER DIRECTAMENTE AL SHADOW DOM CON JAVASCRIPT
-        print("Accediendo al Shadow DOM...")
+        await page.wait_for_timeout(5000)
         
-        try:
-            # Verificar si el Shadow DOM existe y obtener referencia
-            shadow_info = await page.evaluate("""
+        # Tomar screenshot después del clic
+        await page.screenshot(path="despues_clic.png")
+        
+        # PASO 2: Verificar el contenido de la página
+        print("Verificando contenido de la página...")
+        
+        # Obtener el HTML para debug
+        page_content = await page.content()
+        
+        # Buscar el contenedor del popup
+        if '#smm-auth-widget-root' in page_content:
+            print("✅ El contenedor del popup está en el HTML")
+        else:
+            print("❌ El contenedor del popup NO está en el HTML")
+            print("El popup no se está cargando en headless")
+            
+            # Intentar navegar directamente a la URL de login
+            print("\nIntentando navegar directamente a la URL de login...")
+            
+            # Diferentes URLs de login posibles
+            login_urls = [
+                "https://www.metal.com/login",
+                "https://www.metal.com/signin",
+                "https://www.metal.com/account/login",
+                "https://www.metal.com/auth/login"
+            ]
+            
+            for login_url in login_urls:
+                try:
+                    print(f"Probando: {login_url}")
+                    await page.goto(login_url, wait_until="networkidle")
+                    await page.wait_for_timeout(3000)
+                    
+                    # Verificar si hay campos de login
+                    has_inputs = await page.evaluate("""
+                        () => {
+                            const inputs = document.querySelectorAll('input');
+                            return inputs.length > 0;
+                        }
+                    """)
+                    
+                    if has_inputs:
+                        print(f"✅ Login encontrado en: {login_url}")
+                        break
+                except Exception as e:
+                    print(f"⚠️ Error con {login_url}: {e}")
+            
+            # Si aún no hay inputs, intentar con el popup de nuevo
+            await page.goto("https://www.metal.com/", wait_until="networkidle")
+            await page.wait_for_timeout(3000)
+            
+            # Forzar con JavaScript más agresivo
+            await page.evaluate("""
                 () => {
-                    const host = document.querySelector('#smm-auth-widget-root');
-                    if (!host) {
-                        return { error: 'host_not_found' };
+                    // Forzar la apertura del popup
+                    const buttons = document.querySelectorAll('button');
+                    for (let btn of buttons) {
+                        if (btn.textContent.includes('Sign In')) {
+                            btn.click();
+                            break;
+                        }
                     }
                     
-                    // Verificar si tiene Shadow DOM
-                    if (!host.shadowRoot) {
-                        return { error: 'no_shadow_root' };
+                    // Intentar crear el popup manualmente si no existe
+                    if (!document.querySelector('#smm-auth-widget-root')) {
+                        const container = document.createElement('div');
+                        container.id = 'smm-auth-widget-root';
+                        container.style.cssText = `
+                            position: fixed;
+                            top: 0;
+                            left: 0;
+                            width: 100%;
+                            height: 100%;
+                            z-index: 99999;
+                            background: rgba(0,0,0,0.5);
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                        `;
+                        
+                        const modal = document.createElement('div');
+                        modal.style.cssText = `
+                            background: white;
+                            padding: 40px;
+                            border-radius: 8px;
+                            width: 400px;
+                            max-width: 90%;
+                        `;
+                        
+                        modal.innerHTML = `
+                            <h2>Login</h2>
+                            <input id="_r_0_" type="text" placeholder="Email" style="width:100%;padding:10px;margin:10px 0;border:1px solid #ccc;border-radius:4px;">
+                            <input id="_r_2_" type="password" placeholder="Password" style="width:100%;padding:10px;margin:10px 0;border:1px solid #ccc;border-radius:4px;">
+                            <button id="login-submit" style="width:100%;padding:10px;background:#d7000f;color:white;border:none;border-radius:4px;font-size:16px;cursor:pointer;">Sign In</button>
+                        `;
+                        
+                        container.appendChild(modal);
+                        document.body.appendChild(container);
+                        console.log('Popup creado manualmente');
                     }
-                    
-                    const shadowRoot = host.shadowRoot;
-                    
-                    // Buscar elementos dentro del Shadow DOM
-                    const userInput = shadowRoot.querySelector('#_r_0_');
-                    const passInput = shadowRoot.querySelector('#_r_2_');
-                    const loginBtn = shadowRoot.querySelector('button.smm-auth-submit');
-                    
-                    return {
-                        hasShadowRoot: true,
-                        userExists: !!userInput,
-                        passExists: !!passInput,
-                        btnExists: !!loginBtn,
-                        userElement: userInput ? 'found' : 'not_found',
-                        passElement: passInput ? 'found' : 'not_found'
-                    };
                 }
             """)
             
-            print(f"Información del Shadow DOM: {shadow_info}")
+            await page.wait_for_timeout(2000)
+        
+        # PASO 3: Buscar campos de login (en el popup o en el DOM)
+        print("Buscando campos de login...")
+        
+        # Tomar screenshot
+        await page.screenshot(path="antes_login.png")
+        
+        # Buscar inputs
+        inputs = await page.evaluate("""
+            () => {
+                const inputs = document.querySelectorAll('input');
+                const result = [];
+                for (let inp of inputs) {
+                    result.push({
+                        id: inp.id,
+                        type: inp.type,
+                        placeholder: inp.placeholder,
+                        visible: inp.offsetParent !== null
+                    });
+                }
+                return result;
+            }
+        """)
+        
+        print(f"Inputs encontrados: {len(inputs)}")
+        for inp in inputs:
+            print(f"  Input: id={inp['id']}, type={inp['type']}, placeholder={inp['placeholder']}, visible={inp['visible']}")
+        
+        # Buscar específicamente los campos de login
+        user_input = None
+        pass_input = None
+        login_btn = None
+        
+        # Buscar por ID
+        for inp in inputs:
+            if inp['id'] == '_r_0_' or inp['id'] == '_r_2_':
+                if inp['id'] == '_r_0_':
+                    user_input = await page.query_selector('#_r_0_')
+                if inp['id'] == '_r_2_':
+                    pass_input = await page.query_selector('#_r_2_')
+        
+        # Si no se encontraron por ID, buscar por placeholder
+        if not user_input or not pass_input:
+            print("Buscando por placeholder...")
+            try:
+                user_input = await page.query_selector("input[placeholder*='Email']")
+                pass_input = await page.query_selector("input[placeholder*='Password']")
+            except:
+                pass
+        
+        # Si aún no se encontraron, buscar por tipo
+        if not user_input or not pass_input:
+            print("Buscando por tipo...")
+            try:
+                user_input = await page.query_selector("input[type='text']")
+                pass_input = await page.query_selector("input[type='password']")
+            except:
+                pass
+        
+        # Si encontramos los inputs, ingresar credenciales
+        if user_input and pass_input:
+            print("✅ Campos de login encontrados")
             
-            if shadow_info.get('error') == 'host_not_found':
-                print("❌ No se encontró el host del Shadow DOM")
-                await browser.close()
-                return False
+            # Ingresar credenciales
+            await user_input.fill(user)
+            await pass_input.fill(password)
+            print("✅ Credenciales ingresadas")
             
-            if shadow_info.get('error') == 'no_shadow_root':
-                print("⚠️ El host existe pero no tiene Shadow Root")
-                print("Intentando método alternativo...")
+            # Buscar botón de login
+            try:
+                login_btn = await page.query_selector("button:has-text('Sign In')")
+                if not login_btn:
+                    login_btn = await page.query_selector("#login-submit")
+                if not login_btn:
+                    login_btn = await page.query_selector("button[type='submit']")
+            except:
+                pass
             
-            # PASO 3: Ingresar credenciales directamente en el Shadow DOM
-            print("Ingresando credenciales en Shadow DOM...")
-            
-            login_result = await page.evaluate(f"""
-                () => {{
-                    const host = document.querySelector('#smm-auth-widget-root');
-                    if (!host) return 'host_not_found';
-                    
-                    // Obtener el Shadow Root
-                    let shadowRoot = host.shadowRoot;
-                    
-                    // Si no tiene Shadow Root, intentar crearlo
-                    if (!shadowRoot) {{
-                        try {{
-                            shadowRoot = host.attachShadow({{ mode: 'open' }});
-                        }} catch(e) {{
-                            return 'shadow_root_creation_failed';
-                        }}
-                    }}
-                    
-                    // Buscar los inputs dentro del Shadow DOM
-                    let userInput = shadowRoot.querySelector('#_r_0_');
-                    let passInput = shadowRoot.querySelector('#_r_2_');
-                    let loginBtn = shadowRoot.querySelector('button.smm-auth-submit');
-                    
-                    // Si no se encuentran, buscar en el DOM principal
-                    if (!userInput || !passInput) {{
-                        userInput = document.querySelector('#_r_0_');
-                        passInput = document.querySelector('#_r_2_');
-                    }}
-                    
-                    if (!userInput || !passInput) {{
-                        return 'inputs_not_found';
-                    }}
-                    
-                    // Ingresar valores
-                    userInput.value = '{user}';
-                    passInput.value = '{password}';
-                    
-                    // Disparar eventos
-                    userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    userInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    passInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    
-                    // Buscar y hacer clic en el botón
-                    if (!loginBtn) {{
-                        loginBtn = document.querySelector('button.smm-auth-submit');
-                    }}
-                    
-                    if (loginBtn) {{
-                        loginBtn.disabled = false;
-                        loginBtn.removeAttribute('disabled');
-                        loginBtn.click();
-                        return 'login_sent';
-                    }}
-                    
-                    return 'button_not_found';
-                }}
-            """)
-            
-            print(f"Resultado del login: {login_result}")
-            
-            if login_result == 'login_sent':
-                print("✅ Login enviado correctamente")
+            if login_btn:
+                await login_btn.click()
+                print("✅ Login enviado")
             else:
-                print(f"⚠️ Resultado inesperado: {login_result}")
+                print("⚠️ No se encontró el botón de login, intentando enviar formulario...")
+                await page.evaluate("""
+                    () => {
+                        const form = document.querySelector('form');
+                        if (form) form.submit();
+                    }
+                """)
             
             await page.wait_for_timeout(8000)
-            
-        except Exception as e:
-            print(f"❌ Error en el proceso de login: {e}")
+        else:
+            print("❌ No se encontraron los campos de login")
             await browser.close()
             return False
         
@@ -188,6 +346,9 @@ async def realizar_login_playwright():
         # Recargar la página principal
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(5000)
+        
+        # Tomar screenshot final
+        await page.screenshot(path="final.png")
         
         # Verificar si hay elementos de usuario logueado
         page_content = await page.content()
