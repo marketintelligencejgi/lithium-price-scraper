@@ -62,36 +62,72 @@ async def realizar_login_playwright():
             await browser.close()
             return False
         
-        # PASO 2: Esperar y buscar los campos de login
+        # PASO 2: FORZAR LA VISIBILIDAD DEL POPUP CON JAVASCRIPT
+        print("Forzando visibilidad del popup...")
+        
+        try:
+            # Usar JavaScript para hacer visible el popup
+            await page.evaluate("""
+                () => {
+                    // Buscar el contenedor del popup
+                    const popup = document.querySelector('#smm-auth-widget-root');
+                    if (popup) {
+                        // Forzar visibilidad
+                        popup.style.display = 'block';
+                        popup.style.visibility = 'visible';
+                        popup.style.opacity = '1';
+                        popup.style.position = 'fixed';
+                        popup.style.top = '0';
+                        popup.style.left = '0';
+                        popup.style.width = '100%';
+                        popup.style.height = '100%';
+                        popup.style.zIndex = '99999';
+                        popup.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                        
+                        // También forzar visibilidad de los hijos
+                        const children = popup.querySelectorAll('*');
+                        for (let child of children) {
+                            child.style.display = 'block';
+                            child.style.visibility = 'visible';
+                            child.style.opacity = '1';
+                        }
+                        
+                        console.log('Popup forzado a ser visible');
+                        return 'popup_visible';
+                    }
+                    return 'popup_not_found';
+                }
+            """)
+            print("✅ Popup forzado a ser visible")
+            await page.wait_for_timeout(2000)
+            
+        except Exception as e:
+            print(f"⚠️ Error forzando visibilidad: {e}")
+        
+        # PASO 3: Esperar y buscar los campos de login
         print("Buscando campos de login...")
         
         try:
-            # Esperar a que aparezca el contenedor del popup
-            await page.wait_for_selector("#smm-auth-widget-root", state="visible", timeout=10000)
-            print("✅ Popup encontrado")
+            # Esperar a que el contenedor esté visible (ahora debería estar visible)
+            await page.wait_for_selector("#smm-auth-widget-root", state="visible", timeout=5000)
+            print("✅ Popup ahora visible")
             
             # Intentar encontrar los inputs con diferentes estrategias
             inputs_found = False
             
             # Estrategia 1: Shadow DOM
             try:
-                inputs_found = await page.evaluate("""
+                # Verificar si el Shadow DOM existe
+                shadow_exists = await page.evaluate("""
                     () => {
                         const host = document.querySelector('#smm-auth-widget-root');
                         if (!host) return false;
-                        
-                        const shadowRoot = host.shadowRoot;
-                        if (!shadowRoot) return false;
-                        
-                        const userInput = shadowRoot.querySelector('#_r_0_');
-                        const passInput = shadowRoot.querySelector('#_r_2_');
-                        
-                        return !!(userInput && passInput);
+                        return !!host.shadowRoot;
                     }
                 """)
                 
-                if inputs_found:
-                    print("✅ Inputs encontrados en Shadow DOM")
+                if shadow_exists:
+                    print("✅ Shadow DOM encontrado")
                     
                     # Ingresar credenciales en Shadow DOM
                     await page.evaluate(f"""
@@ -124,7 +160,8 @@ async def realizar_login_playwright():
                             }}
                         }}
                     """)
-                    print("✅ Login enviado")
+                    print("✅ Credenciales ingresadas en Shadow DOM")
+                    inputs_found = True
                     
             except Exception as e:
                 print(f"⚠️ Error con Shadow DOM: {e}")
@@ -149,36 +186,59 @@ async def realizar_login_playwright():
                         if login_btn:
                             await login_btn.click()
                             print("✅ Login enviado")
+                            inputs_found = True
                         
                 except Exception as e:
                     print(f"⚠️ Error con DOM principal: {e}")
             
-            # Si no se encontraron los inputs, intentar con un enfoque más agresivo
+            # Estrategia 3: Búsqueda exhaustiva con JavaScript
             if not inputs_found:
-                print("Intentando enfoque agresivo con JavaScript...")
+                print("Buscando inputs con JavaScript exhaustivo...")
                 
-                await page.evaluate(f"""
+                result = await page.evaluate(f"""
                     () => {{
-                        // Buscar cualquier input que pueda ser el de usuario
-                        const inputs = document.querySelectorAll('input');
+                        // Buscar en Shadow DOM primero
+                        const host = document.querySelector('#smm-auth-widget-root');
                         let userInput = null;
                         let passInput = null;
+                        let loginBtn = null;
                         
-                        for (let inp of inputs) {{
-                            const type = inp.getAttribute('type');
-                            const placeholder = inp.getAttribute('placeholder');
-                            const id = inp.getAttribute('id');
+                        if (host && host.shadowRoot) {{
+                            const shadowRoot = host.shadowRoot;
+                            userInput = shadowRoot.querySelector('#_r_0_');
+                            passInput = shadowRoot.querySelector('#_r_2_');
+                            loginBtn = shadowRoot.querySelector('button.smm-auth-submit');
+                        }}
+                        
+                        // Si no se encontraron, buscar en DOM principal
+                        if (!userInput || !passInput) {{
+                            const inputs = document.querySelectorAll('input');
+                            for (let inp of inputs) {{
+                                const type = inp.getAttribute('type');
+                                const placeholder = inp.getAttribute('placeholder');
+                                const id = inp.getAttribute('id');
+                                
+                                if (type === 'text' || type === 'email' || 
+                                    (placeholder && placeholder.toLowerCase().includes('email'))) {{
+                                    userInput = inp;
+                                }}
+                                if (type === 'password' || 
+                                    (placeholder && placeholder.toLowerCase().includes('password'))) {{
+                                    passInput = inp;
+                                }}
+                                if (id === '_r_0_') userInput = inp;
+                                if (id === '_r_2_') passInput = inp;
+                            }}
                             
-                            if (type === 'text' || type === 'email' || 
-                                (placeholder && placeholder.includes('Email'))) {{
-                                userInput = inp;
+                            // Buscar botón
+                            const buttons = document.querySelectorAll('button');
+                            for (let btn of buttons) {{
+                                if (btn.textContent.includes('Sign In') || 
+                                    btn.className.includes('smm-auth-submit')) {{
+                                    loginBtn = btn;
+                                    break;
+                                }}
                             }}
-                            if (type === 'password' || 
-                                (placeholder && placeholder.includes('Password'))) {{
-                                passInput = inp;
-                            }}
-                            if (id === '_r_0_') userInput = inp;
-                            if (id === '_r_2_') passInput = inp;
                         }}
                         
                         if (userInput && passInput) {{
@@ -190,21 +250,23 @@ async def realizar_login_playwright():
                             passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
                             passInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
                             
-                            // Buscar botón
-                            const buttons = document.querySelectorAll('button');
-                            for (let btn of buttons) {{
-                                if (btn.textContent.includes('Sign In') || 
-                                    btn.className.includes('smm-auth-submit')) {{
-                                    btn.disabled = false;
-                                    btn.removeAttribute('disabled');
-                                    btn.click();
-                                    break;
-                                }}
+                            if (loginBtn) {{
+                                loginBtn.disabled = false;
+                                loginBtn.removeAttribute('disabled');
+                                loginBtn.click();
+                                return 'login_sent';
                             }}
+                            return 'inputs_found_but_no_button';
                         }}
+                        return 'inputs_not_found';
                     }}
                 """)
-                print("✅ Login enviado con enfoque agresivo")
+                
+                print(f"Resultado búsqueda exhaustiva: {result}")
+                
+                if result == 'login_sent':
+                    print("✅ Login enviado")
+                    inputs_found = True
             
             await page.wait_for_timeout(8000)
                 
@@ -213,7 +275,7 @@ async def realizar_login_playwright():
             await browser.close()
             return False
         
-        # PASO 3: Verificar login
+        # PASO 4: Verificar login
         print("Verificando login...")
         
         # Recargar la página principal
@@ -241,7 +303,7 @@ async def realizar_login_playwright():
                 await browser.close()
                 return False
         
-        # PASO 4: Verificar acceso a datos
+        # PASO 5: Verificar acceso a datos
         print("\n=== VERIFICANDO ACCESO A DATOS ===")
         
         test_url = "https://www.metal.com/Lithium/201102250059"
