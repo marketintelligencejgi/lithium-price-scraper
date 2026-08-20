@@ -15,8 +15,7 @@ import subprocess
 import random
 from datetime import datetime
 import sys
-import requests
-from bs4 import BeautifulSoup
+import re
 
 ###----------------------------------------------------------------------> INICIO <----------------------------------------------------------------------###
 
@@ -26,25 +25,33 @@ password = os.environ["METAL_PASS"]
 # Configuración optimizada para GitHub Actions
 options = Options()
 
+# IMPORTANTE: Usar headless=new que es más estable
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-blink-features=AutomationControlled")
 options.add_argument("--disable-gpu")
 options.add_argument("--window-size=1920,1080")
+options.add_argument("--disable-extensions")
+options.add_argument("--disable-setuid-sandbox")
+# Deshabilitar animaciones para que el popup aparezca más rápido
+options.add_argument("--disable-animations")
+options.add_argument("--disable-transitions")
 
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-chrome_version = subprocess.check_output(["google-chrome", "--version"]).decode()
-chrome_version = int(chrome_version.split(" ")[2].split(".")[0])
+# Intentar obtener la versión de Chrome
+try:
+    chrome_version = subprocess.check_output(["google-chrome", "--version"]).decode()
+    chrome_version = int(chrome_version.split(" ")[2].split(".")[0])
+except:
+    chrome_version = 120  # Versión por defecto
 
 driver = uc.Chrome(
     options=options,
     headless=True,
     version_main=chrome_version
 )
-
-service = Service()
 
 driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
@@ -53,46 +60,107 @@ driver.get('https://www.metal.com/')
 time.sleep(random.uniform(8, 14))
 
 # ============================================
-# FUNCIÓN PARA LOGIN - ENFOQUE DEFINITIVO
+# FUNCIÓN PARA LOGIN - FORZANDO APERTURA DEL POPUP
 # ============================================
 def realizar_login_definitivo(driver, user, password):
     """
-    Realiza el login accediendo directamente al Shadow DOM
+    Realiza el login forzando la apertura del popup con JavaScript
     """
     print("\n=== INICIANDO LOGIN DEFINITIVO ===")
     
     try:
-        # PASO 1: Hacer clic en Sign In
-        print("Buscando botón Sign In...")
-        boton_signin = WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
-        )
-        driver.execute_script("arguments[0].scrollIntoView(true);", boton_signin)
-        time.sleep(0.5)
-        driver.execute_script("arguments[0].click();", boton_signin)
-        print("✅ Clic en Sign In")
+        # PASO 1: Hacer clic en Sign In de múltiples formas
+        print("Abriendo popup de login...")
+        
+        # Método 1: Clic normal
+        try:
+            boton_signin = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
+            )
+            driver.execute_script("arguments[0].scrollIntoView(true);", boton_signin)
+            time.sleep(0.5)
+            driver.execute_script("arguments[0].click();", boton_signin)
+            print("✅ Clic en Sign In (Método 1)")
+        except:
+            print("❌ Clic normal falló")
+        
+        time.sleep(2)
+        
+        # Método 2: Forzar con JavaScript
+        print("Forzando apertura del popup con JavaScript...")
+        driver.execute_script("""
+            // Buscar y hacer clic en el botón Sign In
+            const buttons = document.querySelectorAll('button');
+            for (let btn of buttons) {
+                if (btn.textContent.includes('Sign In')) {
+                    btn.click();
+                    console.log('Clic forzado en Sign In');
+                    break;
+                }
+            }
+            
+            // Buscar el contenedor del popup y hacerlo visible
+            const popupContainer = document.querySelector('#smm-auth-widget-root');
+            if (popupContainer) {
+                popupContainer.style.display = 'block';
+                popupContainer.style.visibility = 'visible';
+                popupContainer.style.opacity = '1';
+                popupContainer.style.position = 'fixed';
+                popupContainer.style.top = '0';
+                popupContainer.style.left = '0';
+                popupContainer.style.width = '100%';
+                popupContainer.style.height = '100%';
+                popupContainer.style.zIndex = '99999';
+                popupContainer.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                console.log('Popup forzado a ser visible');
+            }
+        """)
+        print("✅ JavaScript de apertura ejecutado")
         time.sleep(3)
         
-        # PASO 2: Acceder al Shadow DOM correctamente
-        print("Accediendo al Shadow DOM...")
+        # PASO 2: Verificar si el Shadow DOM está disponible
+        print("Verificando Shadow DOM...")
         
-        # Verificar si el Shadow DOM existe
-        shadow_host_exists = driver.execute_script("""
-            return document.querySelector('#smm-auth-widget-root') !== null;
+        shadow_check = driver.execute_script("""
+            const host = document.querySelector('#smm-auth-widget-root');
+            if (!host) {
+                console.log('No se encontró el host');
+                return 'no_host';
+            }
+            
+            const shadowRoot = host.shadowRoot;
+            if (!shadowRoot) {
+                console.log('No se encontró el Shadow Root');
+                return 'no_shadow';
+            }
+            
+            // Buscar los inputs
+            const userInput = shadowRoot.querySelector('#_r_0_');
+            const passInput = shadowRoot.querySelector('#_r_2_');
+            
+            if (userInput && passInput) {
+                console.log('Inputs encontrados en Shadow DOM');
+                return 'inputs_found';
+            } else {
+                console.log('Inputs no encontrados');
+                return 'no_inputs';
+            }
         """)
         
-        if not shadow_host_exists:
-            print("❌ No se encontró el contenedor del Shadow DOM")
-            return False
+        print(f"Verificación Shadow DOM: {shadow_check}")
         
-        print("✅ Contenedor Shadow DOM encontrado")
+        if shadow_check == 'inputs_found':
+            print("✅ Shadow DOM accesible")
+        else:
+            print("⚠️ Shadow DOM no accesible directamente")
         
-        # PASO 3: Interactuar con el Shadow DOM usando JavaScript
-        print("Ingresando credenciales en Shadow DOM...")
+        # PASO 3: Intentar diferentes estrategias para llenar el formulario
+        print("Intentando llenar formulario...")
         
+        # Estrategia A: Usar JavaScript para interactuar con el Shadow DOM
         login_script = f"""
         (function() {{
-            // Obtener el host del Shadow DOM
+            // Buscar el host del Shadow DOM
             const host = document.querySelector('#smm-auth-widget-root');
             if (!host) {{
                 console.log('No se encontró el host');
@@ -100,35 +168,60 @@ def realizar_login_definitivo(driver, user, password):
             }}
             
             // Obtener el Shadow Root
-            const shadowRoot = host.shadowRoot;
+            let shadowRoot = host.shadowRoot;
             if (!shadowRoot) {{
-                console.log('No se encontró el Shadow Root');
-                return 'shadow_root_not_found';
+                // Intentar acceder de otra forma
+                shadowRoot = host.attachShadow({{ mode: 'open' }});
+                if (!shadowRoot) {{
+                    console.log('No se pudo acceder al Shadow Root');
+                    return 'shadow_root_failed';
+                }}
             }}
             
-            console.log('Shadow Root encontrado');
+            console.log('Shadow Root accedido');
             
-            // Buscar los inputs
-            const userInput = shadowRoot.querySelector('#_r_0_');
-            const passInput = shadowRoot.querySelector('#_r_2_');
-            const loginBtn = shadowRoot.querySelector('button.smm-auth-submit');
+            // Buscar los inputs dentro del Shadow DOM
+            let userInput = shadowRoot.querySelector('#_r_0_');
+            let passInput = shadowRoot.querySelector('#_r_2_');
+            
+            // Si no están en el Shadow DOM, buscar en el DOM principal
+            if (!userInput || !passInput) {{
+                console.log('Buscando en DOM principal...');
+                userInput = document.querySelector('#_r_0_');
+                passInput = document.querySelector('#_r_2_');
+            }}
             
             if (!userInput || !passInput) {{
                 console.log('Inputs no encontrados');
+                // Buscar cualquier input por tipo/placeholder
+                const inputs = document.querySelectorAll('input');
+                for (let inp of inputs) {{
+                    const type = inp.getAttribute('type');
+                    const placeholder = inp.getAttribute('placeholder');
+                    if (type === 'text' || type === 'email' || (placeholder && placeholder.includes('Email'))) {{
+                        userInput = inp;
+                    }}
+                    if (type === 'password' || (placeholder && placeholder.includes('Password'))) {{
+                        passInput = inp;
+                    }}
+                }}
+            }}
+            
+            if (!userInput || !passInput) {{
+                console.log('Inputs no encontrados después de búsqueda exhaustiva');
                 return 'inputs_not_found';
             }}
             
             console.log('Inputs encontrados');
             
-            // Limpiar e ingresar valores
+            // Ingresar valores
             userInput.value = '';
             passInput.value = '';
             
-            // Ingresar valores
             userInput.value = '{user}';
             passInput.value = '{password}';
             
-            // Disparar eventos para React
+            // Disparar eventos
             userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
             userInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
             passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
@@ -136,14 +229,27 @@ def realizar_login_definitivo(driver, user, password):
             
             console.log('Valores ingresados');
             
-            // Buscar y habilitar el botón
+            // Buscar y hacer clic en el botón de login
+            let loginBtn = shadowRoot.querySelector('button.smm-auth-submit');
+            if (!loginBtn) {{
+                loginBtn = document.querySelector('button.smm-auth-submit');
+            }}
+            if (!loginBtn) {{
+                loginBtn = document.querySelector('button[type="submit"]');
+            }}
+            if (!loginBtn) {{
+                const buttons = document.querySelectorAll('button');
+                for (let btn of buttons) {{
+                    if (btn.textContent.includes('Sign In')) {{
+                        loginBtn = btn;
+                        break;
+                    }}
+                }}
+            }}
+            
             if (loginBtn) {{
-                // Habilitar el botón si está deshabilitado
                 loginBtn.disabled = false;
                 loginBtn.removeAttribute('disabled');
-                console.log('Botón habilitado');
-                
-                // Hacer clic en el botón
                 loginBtn.click();
                 console.log('Login enviado');
                 return 'login_sent';
@@ -157,21 +263,16 @@ def realizar_login_definitivo(driver, user, password):
         result = driver.execute_script(login_script)
         print(f"Resultado del login: {result}")
         
-        if result == 'login_sent':
-            print("✅ Login enviado correctamente")
-        else:
-            print(f"⚠️ Resultado inesperado: {result}")
-        
-        # PASO 4: Esperar a que el login se procese
+        # PASO 4: Esperar y verificar
         print("Esperando procesamiento del login...")
-        time.sleep(10)
+        time.sleep(12)
         
         # PASO 5: Verificar el login
         print("Verificando login...")
         
         # Recargar la página principal
         driver.get("https://www.metal.com/")
-        time.sleep(5)
+        time.sleep(8)
         
         # Verificar si hay elementos de usuario logueado
         elementos_logout = driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out') or contains(text(), 'Logout') or contains(text(), 'My Account')]")
@@ -180,11 +281,11 @@ def realizar_login_definitivo(driver, user, password):
             print("✅ LOGIN EXITOSO - Usuario autenticado")
             return True
         
-        # Verificar si hay cookies de sesión
+        # Verificar cookies de sesión
         cookies = driver.get_cookies()
         session_cookie = None
         for cookie in cookies:
-            if 'session' in cookie.get('name', '').lower() or 'auth' in cookie.get('name', '').lower():
+            if any(key in cookie.get('name', '').lower() for key in ['session', 'auth', 'token', 'sid']):
                 session_cookie = cookie
                 break
         
@@ -216,13 +317,9 @@ def verificar_acceso_datos(driver):
         print("❌ No se puede acceder a los datos - Pide autenticación")
         return False
     
-    # Verificar si hay datos reales (números con formato de precio)
-    import re
-    price_pattern = r'\d+[,.]?\d*'
-    numbers = re.findall(price_pattern, page_source)
-    
-    # Si hay más de 5 números en la página, probablemente hay datos
-    if len(numbers) > 5:
+    # Verificar si hay datos reales
+    numbers = re.findall(r'\d+[,.]?\d*', page_source)
+    if len(numbers) > 10:
         print(f"✅ Se puede acceder a los datos ({len(numbers)} números encontrados)")
         return True
     else:
@@ -248,7 +345,7 @@ if not verificar_acceso_datos(driver):
 print("\n✅ Login verificado - Continuando con scraping...")
 
 # =========================
-# FUNCIONES DE SCRAPING
+# FUNCIONES DE SCRAPING (sin cambios)
 # =========================
 
 def page_not_found(driver):
@@ -464,10 +561,6 @@ df_rare_earth = df_rare_earth.rename(columns={
 # ============================================
 print("\n=== VERIFICANDO DATOS EXTRAÍDOS ===")
 
-# Verificar si hay datos en los DataFrames
-tiene_datos = False
-
-# Función para verificar si un DataFrame tiene datos válidos
 def df_tiene_datos(df):
     if df.empty:
         return False
@@ -475,6 +568,8 @@ def df_tiene_datos(df):
         if df[col].notna().any() and (df[col] != "").any() and (df[col] != "N/A").any():
             return True
     return False
+
+tiene_datos = False
 
 if df_tiene_datos(df_lithium_carbonate):
     tiene_datos = True
