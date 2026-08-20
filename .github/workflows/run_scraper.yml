@@ -20,9 +20,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           echo "Installing Python dependencies..."
+          pip install --upgrade pip
           pip install pandas openpyxl xlsxwriter playwright
 
       - name: Install Playwright browsers
@@ -31,9 +32,10 @@ jobs:
           playwright install chromium
           playwright install-deps
 
-      - name: Show Playwright version
+      - name: Verify Playwright installation
         run: |
-          python -c "import playwright; print('Playwright version:', playwright.__version__)"
+          python -c "from playwright.sync_api import sync_playwright; print('✅ Playwright installed successfully')"
+          playwright --version
 
       - name: Run scraper with retry
         env:
@@ -71,5 +73,13 @@ jobs:
             exit 1
           fi
       
+      - name: Upload report artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-diario
+          path: Reporte_Diario.xlsx
+          retention-days: 30
+
       - name: Success log
         run: echo "Scraper completed successfully"
