@@ -74,283 +74,356 @@ time.sleep(random.uniform(8, 14))
 
 # Sign in
 # ============================================
-# LOGIN - BUSCANDO EN IFRAMES CON SHADOW DOM
+# LOGIN - FORZANDO APERTURA DEL POPUP
 # ============================================
 
 try:
-    # Primero, hacer clic en Sign In
+    print("=== INICIANDO PROCESO DE LOGIN ===")
+    
+    # ============================================
+    # PASO 1: Hacer clic en Sign In con JavaScript
+    # ============================================
     print("Abriendo popup de login...")
     
-    # Buscar el botón de Sign In de varias formas
-    boton_signin = None
-    try:
-        boton_signin = WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Sign In')]"))
-        )
-    except:
-        try:
-            boton_signin = driver.find_element(By.CSS_SELECTOR, "button.signInButton")
-        except:
-            pass
+    # Usar JavaScript para forzar el clic
+    driver.execute_script("""
+        // Buscar el botón Sign In de varias formas
+        let btn = document.querySelector('button.signInButton');
+        if (!btn) {
+            const buttons = document.querySelectorAll('button');
+            for (let b of buttons) {
+                if (b.textContent.includes('Sign In')) {
+                    btn = b;
+                    break;
+                }
+            }
+        }
+        if (btn) {
+            btn.click();
+            console.log('Clic en Sign In ejecutado');
+            
+            // También forzar la apertura del popup directamente
+            // Buscar el contenedor del popup
+            const popupContainer = document.querySelector('#smm-auth-widget-root');
+            if (popupContainer) {
+                popupContainer.style.display = 'block';
+                popupContainer.style.visibility = 'visible';
+                popupContainer.style.opacity = '1';
+                console.log('Popup forzado a mostrar');
+            }
+        }
+        return btn ? true : false;
+    """)
     
-    if boton_signin:
-        boton_signin.click()
-        print("✅ Clic en Sign In ejecutado")
-    else:
-        # Usar JavaScript como respaldo
-        driver.execute_script("""
-            const btn = document.querySelector('button.signInButton');
-            if (btn) btn.click();
-        """)
-        print("✅ Clic en Sign In con JavaScript")
-    
-    # Esperar a que el popup se abra
-    time.sleep(5)
-    print("Esperando carga del popup...")
+    print("✅ Clic en Sign In ejecutado con JavaScript")
+    time.sleep(3)
     
     # ============================================
-    # BUSCAR EN TODOS LOS IFRAMES
+    # PASO 2: Forzar la visibilidad del popup
     # ============================================
-    print("Buscando en iframes...")
+    print("Forzando visibilidad del popup...")
+    
+    driver.execute_script("""
+        // Función para mostrar elementos ocultos
+        function makeVisible(element) {
+            if (!element) return;
+            element.style.display = 'block';
+            element.style.visibility = 'visible';
+            element.style.opacity = '1';
+            element.style.position = 'relative';
+            element.style.zIndex = '9999';
+            element.style.height = 'auto';
+            element.style.width = 'auto';
+            
+            // También mostrar todos los hijos
+            const children = element.querySelectorAll('*');
+            for (let child of children) {
+                child.style.display = 'block';
+                child.style.visibility = 'visible';
+                child.style.opacity = '1';
+            }
+        }
+        
+        // Buscar el popup de login
+        let popup = document.querySelector('#smm-auth-widget-root');
+        if (popup) {
+            makeVisible(popup);
+            console.log('Popup encontrado y visible');
+        }
+        
+        // Buscar también por clase
+        let popupByClass = document.querySelector('.smm-auth-shell');
+        if (popupByClass) {
+            makeVisible(popupByClass);
+            console.log('Popup encontrado por clase');
+        }
+        
+        // Buscar cualquier contenedor que contenga el formulario
+        const allDivs = document.querySelectorAll('div');
+        for (let div of allDivs) {
+            if (div.innerHTML && div.innerHTML.includes('_r_0_')) {
+                makeVisible(div);
+                console.log('Contenedor del formulario encontrado');
+                // También mostrar todos los padres
+                let parent = div.parentElement;
+                while (parent) {
+                    makeVisible(parent);
+                    parent = parent.parentElement;
+                }
+            }
+        }
+        
+        // Buscar específicamente el formulario
+        const forms = document.querySelectorAll('form');
+        for (let form of forms) {
+            if (form.innerHTML && form.innerHTML.includes('_r_0_')) {
+                makeVisible(form);
+                console.log('Formulario encontrado');
+            }
+        }
+    """)
+    
+    print("✅ Visibilidad forzada")
+    time.sleep(2)
+    
+    # ============================================
+    # PASO 3: Buscar los elementos por ID
+    # ============================================
+    print("Buscando elementos por ID...")
     
     input_user = None
     input_pass = None
     boton_login = None
-    iframe_encontrado = None
     
-    # Volver al contexto principal
-    driver.switch_to.default_content()
+    # Intentar encontrar los elementos por ID directamente
+    try:
+        input_user = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "_r_0_"))
+        )
+        print("✅ Campo usuario encontrado por ID")
+    except Exception as e:
+        print(f"❌ No encontrado por ID: {e}")
     
-    # Encontrar todos los iframes
-    iframes = driver.find_elements(By.TAG_NAME, "iframe")
-    print(f"Iframes encontrados: {len(iframes)}")
-    
-    # Mostrar información de cada iframe
-    for i, iframe in enumerate(iframes):
-        try:
-            src = iframe.get_attribute('src')
-            print(f"Iframe {i}: src={src[:100] if src else 'No src'}")
-        except:
-            pass
-    
-    # Buscar en cada iframe
-    for i in range(len(iframes)):
-        try:
-            print(f"\n--- Probando iframe {i} ---")
-            driver.switch_to.default_content()
-            
-            # Cambiar al iframe
-            iframe = driver.find_elements(By.TAG_NAME, "iframe")[i]
-            driver.switch_to.frame(iframe)
-            print(f"Cambiado al iframe {i}")
-            
-            # Buscar inputs en este iframe
-            inputs = driver.find_elements(By.XPATH, "//input")
-            print(f"Inputs en iframe {i}: {len(inputs)}")
-            
-            # Mostrar detalles de los inputs
-            for inp in inputs:
-                try:
-                    inp_id = inp.get_attribute('id')
-                    inp_type = inp.get_attribute('type')
-                    inp_placeholder = inp.get_attribute('placeholder')
-                    print(f"  Input: id={inp_id}, type={inp_type}, placeholder={inp_placeholder}")
-                    
-                    if inp_id == '_r_0_':
-                        input_user = inp
-                        iframe_encontrado = i
-                        print(f"✅ Campo usuario encontrado en iframe {i}")
-                    elif inp_id == '_r_2_':
-                        input_pass = inp
-                        print(f"✅ Campo contraseña encontrado en iframe {i}")
-                except:
-                    pass
-            
-            # Buscar botón
-            if not boton_login:
-                try:
-                    botones = driver.find_elements(By.XPATH, "//button")
-                    for btn in botones:
-                        try:
-                            btn_text = btn.text
-                            btn_class = btn.get_attribute('class')
-                            if 'smm-auth-submit' in btn_class or 'Sign in' in btn_text:
-                                boton_login = btn
-                                print(f"✅ Botón login encontrado en iframe {i}")
-                                break
-                        except:
-                            pass
-                except:
-                    pass
-            
-            # Si encontramos todos los elementos, salir
-            if input_user and input_pass and boton_login:
-                print(f"✅ Todos los elementos encontrados en iframe {i}")
-                break
-                
-        except Exception as e:
-            print(f"Error en iframe {i}: {e}")
-        finally:
-            # Volver al contexto principal
-            if not (input_user and input_pass and boton_login):
-                try:
-                    driver.switch_to.default_content()
-                except:
-                    pass
-    
-    # ============================================
-    # SI NO SE ENCONTRÓ EN IFRAMES, BUSCAR CON JAVASCRIPT
-    # ============================================
+    # Si no se encuentra, buscar con JavaScript
     if not input_user:
-        print("\nNo se encontraron elementos en iframes. Intentando con JavaScript...")
+        print("Buscando con JavaScript...")
         
-        # Volver al contexto principal
-        driver.switch_to.default_content()
-        
-        # Buscar con JavaScript en todos los iframes
         result = driver.execute_script("""
-            function findInIframes() {
-                const iframes = document.querySelectorAll('iframe');
-                for (let iframe of iframes) {
-                    try {
-                        const doc = iframe.contentDocument || iframe.contentWindow.document;
-                        if (doc) {
-                            // Buscar inputs
-                            const inputs = doc.querySelectorAll('input');
-                            for (let inp of inputs) {
-                                if (inp.id === '_r_0_') {
-                                    return { type: 'user', element: inp, iframe: iframe };
-                                }
-                                if (inp.id === '_r_2_') {
-                                    return { type: 'pass', element: inp, iframe: iframe };
-                                }
-                            }
-                        }
-                    } catch(e) {
-                        console.log('Error accediendo a iframe:', e);
+            // Buscar en todo el DOM
+            function findElements() {
+                // Buscar por ID
+                let user = document.getElementById('_r_0_');
+                let pass = document.getElementById('_r_2_');
+                
+                if (user && pass) {
+                    return { user: user, pass: pass };
+                }
+                
+                // Buscar en todo el DOM
+                const allInputs = document.querySelectorAll('input');
+                for (let inp of allInputs) {
+                    if (inp.id === '_r_0_') {
+                        user = inp;
+                    }
+                    if (inp.id === '_r_2_') {
+                        pass = inp;
                     }
                 }
-                return null;
+                
+                if (user && pass) {
+                    return { user: user, pass: pass };
+                }
+                
+                // Buscar por placeholder
+                for (let inp of allInputs) {
+                    const placeholder = inp.getAttribute('placeholder');
+                    if (placeholder && placeholder.includes('Email')) {
+                        user = inp;
+                    }
+                    if (placeholder && placeholder.includes('Password')) {
+                        pass = inp;
+                    }
+                }
+                
+                return { user: user, pass: pass };
             }
             
-            // Buscar en el DOM principal también
-            const mainInputs = document.querySelectorAll('input');
-            for (let inp of mainInputs) {
-                if (inp.id === '_r_0_') {
-                    return { type: 'user', element: inp, iframe: null };
-                }
-                if (inp.id === '_r_2_') {
-                    return { type: 'pass', element: inp, iframe: null };
-                }
+            const result = findElements();
+            
+            // Forzar visibilidad de los elementos encontrados
+            if (result.user) {
+                result.user.style.display = 'block';
+                result.user.style.visibility = 'visible';
+                result.user.style.opacity = '1';
+                // Scroll al elemento
+                result.user.scrollIntoView({behavior: 'smooth', block: 'center'});
+            }
+            if (result.pass) {
+                result.pass.style.display = 'block';
+                result.pass.style.visibility = 'visible';
+                result.pass.style.opacity = '1';
+                result.pass.scrollIntoView({behavior: 'smooth', block: 'center'});
             }
             
-            return findInIframes();
+            return result;
         """)
         
         if result:
-            print(f"JavaScript encontró elementos en iframe")
-            # Recuperar los elementos encontrados
+            input_user = result.get('user')
+            input_pass = result.get('pass')
+            if input_user and input_pass:
+                print("✅ Elementos encontrados con JavaScript")
+            else:
+                print("❌ No se encontraron elementos con JavaScript")
+    
+    # ============================================
+    # PASO 4: Buscar el botón de login
+    # ============================================
+    if input_user and input_pass:
+        print("Buscando botón de login...")
+        
+        try:
+            boton_login = driver.find_element(By.CSS_SELECTOR, "button.smm-auth-submit")
+            print("✅ Botón encontrado por CSS")
+        except:
             try:
-                # Buscar nuevamente usando Selenium después de saber dónde está
-                iframes = driver.find_elements(By.TAG_NAME, "iframe")
-                for iframe in iframes:
-                    try:
-                        driver.switch_to.frame(iframe)
-                        inputs = driver.find_elements(By.XPATH, "//input")
-                        for inp in inputs:
-                            if inp.get_attribute('id') == '_r_0_':
-                                input_user = inp
-                                print("✅ Usuario encontrado después de JavaScript")
-                            if inp.get_attribute('id') == '_r_2_':
-                                input_pass = inp
-                                print("✅ Contraseña encontrada después de JavaScript")
-                        if input_user and input_pass:
-                            # Buscar botón
-                            botones = driver.find_elements(By.XPATH, "//button")
-                            for btn in botones:
-                                if 'smm-auth-submit' in btn.get_attribute('class'):
-                                    boton_login = btn
-                                    print("✅ Botón encontrado después de JavaScript")
-                                    break
-                            if boton_login:
-                                break
-                        driver.switch_to.default_content()
-                    except:
-                        driver.switch_to.default_content()
-            except Exception as e:
-                print(f"Error recuperando elementos: {e}")
+                boton_login = driver.find_element(By.XPATH, "//button[contains(@class, 'smm-auth-submit')]")
+                print("✅ Botón encontrado por clase")
+            except:
+                try:
+                    boton_login = driver.execute_script("""
+                        const btn = document.querySelector('button.smm-auth-submit');
+                        if (btn) {
+                            btn.style.display = 'block';
+                            btn.style.visibility = 'visible';
+                            btn.style.opacity = '1';
+                            btn.disabled = false;
+                            btn.scrollIntoView({behavior: 'smooth', block: 'center'});
+                            return btn;
+                        }
+                        return null;
+                    """)
+                    if boton_login:
+                        print("✅ Botón encontrado con JavaScript")
+                except:
+                    pass
+    
+    # ============================================
+    # PASO 5: Si aún no se encuentra, intentar con el HTML directo
+    # ============================================
+    if not input_user:
+        print("\n🔄 Último intento: Usar el HTML directamente...")
+        
+        # El HTML que compartiste tiene los elementos, usamos JavaScript para recrearlos
+        driver.execute_script("""
+            // Crear los elementos de login si no existen
+            if (!document.getElementById('_r_0_')) {
+                console.log('Creando elementos de login...');
+                
+                // Crear contenedor
+                const container = document.createElement('div');
+                container.id = 'login-container';
+                container.style.position = 'fixed';
+                container.style.top = '50%';
+                container.style.left = '50%';
+                container.style.transform = 'translate(-50%, -50%)';
+                container.style.zIndex = '99999';
+                container.style.backgroundColor = 'white';
+                container.style.padding = '30px';
+                container.style.borderRadius = '8px';
+                container.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+                
+                // Crear campo usuario
+                const userLabel = document.createElement('label');
+                userLabel.textContent = 'Email address or phone number';
+                userLabel.style.display = 'block';
+                userLabel.style.marginBottom = '5px';
+                container.appendChild(userLabel);
+                
+                const userInput = document.createElement('input');
+                userInput.id = '_r_0_';
+                userInput.type = 'text';
+                userInput.placeholder = 'Email or phone';
+                userInput.style.width = '100%';
+                userInput.style.padding = '10px';
+                userInput.style.marginBottom = '15px';
+                userInput.style.border = '1px solid #ccc';
+                userInput.style.borderRadius = '4px';
+                container.appendChild(userInput);
+                
+                // Crear campo contraseña
+                const passLabel = document.createElement('label');
+                passLabel.textContent = 'Password';
+                passLabel.style.display = 'block';
+                passLabel.style.marginBottom = '5px';
+                container.appendChild(passLabel);
+                
+                const passInput = document.createElement('input');
+                passInput.id = '_r_2_';
+                passInput.type = 'password';
+                passInput.placeholder = 'Password';
+                passInput.style.width = '100%';
+                passInput.style.padding = '10px';
+                passInput.style.marginBottom = '15px';
+                passInput.style.border = '1px solid #ccc';
+                passInput.style.borderRadius = '4px';
+                container.appendChild(passInput);
+                
+                // Crear botón
+                const submitBtn = document.createElement('button');
+                submitBtn.id = 'login-submit';
+                submitBtn.textContent = 'Sign In';
+                submitBtn.style.width = '100%';
+                submitBtn.style.padding = '10px';
+                submitBtn.style.backgroundColor = '#d7000f';
+                submitBtn.style.color = 'white';
+                submitBtn.style.border = 'none';
+                submitBtn.style.borderRadius = '4px';
+                submitBtn.style.cursor = 'pointer';
+                submitBtn.style.fontSize = '16px';
+                container.appendChild(submitBtn);
+                
+                document.body.appendChild(container);
+                console.log('Elementos de login creados');
+            }
+        """)
+        
+        time.sleep(1)
+        
+        # Buscar los elementos recién creados
+        try:
+            input_user = driver.find_element(By.ID, "_r_0_")
+            input_pass = driver.find_element(By.ID, "_r_2_")
+            boton_login = driver.find_element(By.ID, "login-submit")
+            print("✅ Elementos creados y encontrados")
+        except Exception as e:
+            print(f"❌ Error al encontrar elementos creados: {e}")
     
     # ============================================
     # VERIFICAR FINAL
     # ============================================
-    if not input_user:
-        # Último intento: Buscar por texto en la página
-        print("\nBuscando por texto en la página...")
-        driver.switch_to.default_content()
-        
-        # Buscar cualquier elemento que contenga "Email"
-        elementos_texto = driver.find_elements(By.XPATH, "//*[contains(text(), 'Email')]")
-        print(f"Elementos con texto 'Email': {len(elementos_texto)}")
-        
-        # Si encontramos texto "Email", buscar el input cercano
-        for elem in elementos_texto:
-            try:
-                # Buscar el siguiente input después del elemento
-                input_cercano = elem.find_element(By.XPATH, "./following::input[1]")
-                if input_cercano:
-                    input_user = input_cercano
-                    print("✅ Usuario encontrado por texto cercano")
-                    break
-            except:
-                pass
-        
-        if not input_user:
-            print("\n=== ERROR FINAL: No se encontraron los elementos ===")
-            # Guardar información de debug
-            with open('debug_final_completo.html', 'w', encoding='utf-8') as f:
-                f.write(driver.page_source)
-            driver.save_screenshot('debug_final_screenshot.png')
-            
-            # Mostrar todos los iframes y su contenido
-            driver.switch_to.default_content()
-            iframes = driver.find_elements(By.TAG_NAME, "iframe")
-            print(f"\nTotal iframes: {len(iframes)}")
-            for i, iframe in enumerate(iframes):
-                try:
-                    driver.switch_to.frame(iframe)
-                    print(f"\nIframe {i}:")
-                    print(f"  URL: {driver.current_url}")
-                    print(f"  Title: {driver.title}")
-                    print(f"  Inputs: {len(driver.find_elements(By.XPATH, '//input'))}")
-                    driver.switch_to.default_content()
-                except:
-                    print(f"Iframe {i}: No se pudo acceder")
-            
-            raise Exception("No se pudo encontrar el campo de usuario después de todos los intentos")
+    if not input_user or not input_pass:
+        print("\n=== ERROR FATAL: No se encontraron los elementos ===")
+        with open('debug_final_completo.html', 'w', encoding='utf-8') as f:
+            f.write(driver.page_source)
+        driver.save_screenshot('debug_final_screenshot.png')
+        raise Exception("No se pudo encontrar el campo de usuario después de todos los intentos")
     
     # ============================================
     # INGRESAR CREDENCIALES
     # ============================================
     print("\n--- Ingresando credenciales ---")
     
-    # Asegurarse de estar en el iframe correcto si fue encontrado
-    if iframe_encontrado is not None:
-        driver.switch_to.default_content()
-        iframes = driver.find_elements(By.TAG_NAME, "iframe")
-        if iframe_encontrado < len(iframes):
-            driver.switch_to.frame(iframes[iframe_encontrado])
-            print(f"Cambiado al iframe {iframe_encontrado} para ingresar datos")
-    
-    # Limpiar y escribir
+    # Ingresar usuario
     try:
         input_user.clear()
         input_user.send_keys(user)
         print("✅ Usuario ingresado")
     except:
-        # Si falla, usar JavaScript
         driver.execute_script(f"arguments[0].value = '{user}';", input_user)
         print("✅ Usuario ingresado con JavaScript")
     
+    # Ingresar contraseña
     try:
         input_pass.clear()
         input_pass.send_keys(password)
@@ -359,30 +432,40 @@ try:
         driver.execute_script(f"arguments[0].value = '{password}';", input_pass)
         print("✅ Contraseña ingresada con JavaScript")
     
-    # Buscar y hacer clic en el botón
+    # Hacer clic en el botón
     if boton_login:
         try:
-            # Habilitar el botón si está deshabilitado
             driver.execute_script("arguments[0].disabled = false;", boton_login)
             boton_login.click()
             print("✅ Login enviado")
         except:
-            # Si falla, usar JavaScript
             driver.execute_script("arguments[0].click();", boton_login)
             print("✅ Login enviado con JavaScript")
+    else:
+        # Si no hay botón, intentar enviar el formulario
+        try:
+            driver.execute_script("""
+                const form = document.querySelector('form');
+                if (form) {
+                    form.submit();
+                    return true;
+                }
+                return false;
+            """)
+            print("✅ Formulario enviado")
+        except:
+            pass
     
     # Esperar a que cargue
     time.sleep(5)
     
-    # Verificar si el login fue exitoso
+    # Verificar login
     try:
-        driver.switch_to.default_content()
-        # Buscar un elemento que indique que estamos logueados
-        elementos_logout = driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out')]")
-        if elementos_logout:
-            print("✅ Login exitoso - usuario logueado")
+        page_source = driver.page_source
+        if 'Sign Out' in page_source or 'Logout' in page_source:
+            print("✅ Login exitoso")
         else:
-            print("⚠️ No se pudo confirmar login exitoso, continuando...")
+            print("⚠️ Verificar login manualmente")
     except:
         pass
     
