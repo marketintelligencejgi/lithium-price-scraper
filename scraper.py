@@ -472,11 +472,11 @@ try:
     print("✅ Proceso de login completado")
 
     # ============================================
-    # POST-LOGIN: LIMPIAR Y PREPARAR PARA SCRAPING
+    # POST-LOGIN: LIMPIEZA Y RECARGA COMPLETA
     # ============================================
     print("\n--- Preparando para scraping ---")
     
-    # Eliminar los elementos artificiales que creamos
+    # PASO 1: Eliminar elementos artificiales
     try:
         driver.execute_script("""
             const container = document.getElementById('login-container');
@@ -489,30 +489,27 @@ try:
     except:
         pass
     
-    # Volver al contexto principal
+    # PASO 2: Volver al contexto principal
     try:
         driver.switch_to.default_content()
         print("✅ Contexto principal restaurado")
     except:
         pass
     
-    # Esperar a que la página se estabilice
-    time.sleep(3)
-    
-    # Verificar si estamos en la página correcta
+    # PASO 3: Limpiar cookies y caché para asegurar estado limpio
+    print("Limpiando estado del navegador...")
     try:
-        current_url = driver.current_url
-        print(f"URL actual: {current_url}")
-        
-        # Si estamos en la página de login o en una URL de error, navegar a la página principal
-        if 'login' in current_url or 'signin' in current_url or 'auth' in current_url:
-            print("Redirigiendo a la página principal...")
-            driver.get("https://www.metal.com/")
-            time.sleep(5)
+        driver.delete_all_cookies()
+        print("✅ Cookies eliminadas")
     except:
         pass
     
-    # Verificar si el login fue exitoso
+    # PASO 4: Navegar a la página principal y esperar
+    print("Navegando a la página principal...")
+    driver.get("https://www.metal.com/")
+    time.sleep(5)
+    
+    # PASO 5: Verificar si el login fue exitoso
     try:
         # Buscar elementos que indiquen que estamos logueados
         elementos_logout = driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out') or contains(text(), 'Logout')]")
@@ -523,7 +520,7 @@ try:
     except:
         pass
     
-    # Recargar la página para asegurar que todos los elementos estén actualizados
+    # PASO 6: Recargar para asegurar que la página esté en estado correcto
     print("Recargando página...")
     driver.refresh()
     time.sleep(5)
@@ -550,44 +547,127 @@ wait = WebDriverWait(driver,10)
 # =========================
 
 def page_not_found(driver):
+    """Verifica si la página existe y tiene datos"""
     try:
-        driver.find_element(By.XPATH,'//div[contains(@class,"PriceWrap")]')
-        return False
-    except NoSuchElementException:
+        # Esperar un poco para que cargue
+        time.sleep(2)
+        
+        # Buscar indicadores de que la página tiene datos
+        # Buscar por las clases que sabemos que funcionaban
+        elementos = driver.find_elements(By.XPATH, '//div[contains(@class, "__PriceWrap")]')
+        if elementos:
+            print(f"  Encontrado __PriceWrap: {len(elementos)} elementos")
+            return False
+        
+        # Buscar por el contenedor alternativo
+        elementos = driver.find_elements(By.XPATH, '//div[contains(@class, "PriceWrap")]')
+        if elementos:
+            print(f"  Encontrado PriceWrap: {len(elementos)} elementos")
+            return False
+        
+        # Si no hay elementos de precio, verificar si hay mensaje de error
+        mensaje_error = driver.find_elements(By.XPATH, '//*[contains(text(), "404") or contains(text(), "Not Found") or contains(text(), "no encontrado")]')
+        if mensaje_error:
+            print("  Página no encontrada")
+            return True
+        
+        # Si no hay elementos de precio y no hay mensaje de error, asumimos que no hay datos
+        print("  No se encontraron elementos de precio")
+        return True
+        
+    except Exception as e:
+        print(f"  Error en page_not_found: {e}")
         return True
 
 def extract_price_data(driver, url):
-    driver.get(url)
-    time.sleep(3)
-
-    if page_not_found(driver):
-        return None, None
-    
-    container = WebDriverWait(driver,10).until(EC.presence_of_element_located((By.XPATH,'//div[contains(@class,"__PriceWrap")]')))
-
-    first_price = container.find_element(By.XPATH,'.//div[contains(@class,"avg")]').text
-
-    high = None
-    low = None
-
+    """Extrae datos de precio de una URL - Versión con los selectores originales"""
     try:
-        high = container.find_element(By.XPATH,'.//div[contains(@class,"list")]/div[1]/label[2]').text
-    except:
-        pass
-
-    try:
-        low = container.find_element(By.XPATH,'.//div[contains(@class,"list")]/div[2]/label[2]').text
-    except:
-        pass
-
-    time.sleep(3)
-
-    if low is not None and high is not None:
-        price_range = f"{low}-{high}"
-    else:
+        print(f"\n🔍 Extrayendo datos de: {url}")
+        
+        # Navegar a la URL
+        driver.get(url)
+        print(f"  Navegando a {url}")
+        time.sleep(5)
+        
+        # Verificar si la página existe
+        if page_not_found(driver):
+            print(f"⚠️ Página no encontrada o sin datos: {url}")
+            return None, None
+        
+        # Esperar a que el contenedor esté presente
+        try:
+            container = WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "__PriceWrap")]'))
+            )
+            print("  ✅ Contenedor __PriceWrap encontrado")
+        except:
+            try:
+                # Intentar con el selector alternativo
+                container = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "PriceWrap")]'))
+                )
+                print("  ✅ Contenedor PriceWrap encontrado")
+            except Exception as e:
+                print(f"  ❌ No se encontró contenedor de precios: {e}")
+                # Guardar HTML para debug
+                with open(f'debug_no_container_{url.split("/")[-1]}.html', 'w', encoding='utf-8') as f:
+                    f.write(driver.page_source)
+                return None, None
+        
+        # Extraer precio promedio
+        first_price = None
+        try:
+            # Usar el selector original
+            price_element = container.find_element(By.XPATH, './/div[contains(@class,"avg")]')
+            first_price = price_element.text.strip()
+            print(f"  ✅ Precio promedio: {first_price}")
+        except Exception as e:
+            print(f"  ❌ Error extrayendo precio promedio: {e}")
+        
+        # Extraer rango de precios
+        high = None
+        low = None
+        try:
+            high_element = container.find_element(By.XPATH, './/div[contains(@class,"list")]/div[1]/label[2]')
+            high = high_element.text.strip()
+            print(f"  ✅ High: {high}")
+        except:
+            print("  ⚠️ No se encontró High")
+        
+        try:
+            low_element = container.find_element(By.XPATH, './/div[contains(@class,"list")]/div[2]/label[2]')
+            low = low_element.text.strip()
+            print(f"  ✅ Low: {low}")
+        except:
+            print("  ⚠️ No se encontró Low")
+        
+        # Formatear rango
         price_range = None
-
-    return first_price, price_range
+        if low is not None and high is not None:
+            price_range = f"{low}-{high}"
+            print(f"  ✅ Rango de precios: {price_range}")
+        else:
+            # Si no hay rango, usar el precio promedio
+            if first_price:
+                price_range = first_price
+                print(f"  ℹ️ Usando precio promedio como rango: {price_range}")
+        
+        if first_price:
+            print(f"  ✅ Datos extraídos exitosamente")
+        else:
+            print(f"  ❌ No se pudo extraer el precio")
+        
+        return first_price, price_range
+        
+    except Exception as e:
+        print(f"❌ Error extrayendo datos de {url}: {str(e)}")
+        try:
+            driver.save_screenshot(f"error_price_{url.split('/')[-1]}.png")
+            with open(f'error_html_{url.split("/")[-1]}.html', 'w', encoding='utf-8') as f:
+                f.write(driver.page_source)
+        except:
+            pass
+        return None, None
 
 # =========================
 # LITHIUM CARBONATE
