@@ -83,3 +83,13 @@ jobs:
 
       - name: Success log
         run: echo "Scraper completed successfully"
+
+      - name: Upload screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: |
+            screenshot_*.png
+            *.html
+          retention-days: 7
