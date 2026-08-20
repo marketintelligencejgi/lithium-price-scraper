@@ -470,7 +470,66 @@ try:
         pass
     
     print("✅ Proceso de login completado")
+
+    # ============================================
+    # POST-LOGIN: LIMPIAR Y PREPARAR PARA SCRAPING
+    # ============================================
+    print("\n--- Preparando para scraping ---")
     
+    # Eliminar los elementos artificiales que creamos
+    try:
+        driver.execute_script("""
+            const container = document.getElementById('login-container');
+            if (container) {
+                container.remove();
+                console.log('Elementos artificiales eliminados');
+            }
+        """)
+        print("✅ Elementos artificiales eliminados")
+    except:
+        pass
+    
+    # Volver al contexto principal
+    try:
+        driver.switch_to.default_content()
+        print("✅ Contexto principal restaurado")
+    except:
+        pass
+    
+    # Esperar a que la página se estabilice
+    time.sleep(3)
+    
+    # Verificar si estamos en la página correcta
+    try:
+        current_url = driver.current_url
+        print(f"URL actual: {current_url}")
+        
+        # Si estamos en la página de login o en una URL de error, navegar a la página principal
+        if 'login' in current_url or 'signin' in current_url or 'auth' in current_url:
+            print("Redirigiendo a la página principal...")
+            driver.get("https://www.metal.com/")
+            time.sleep(5)
+    except:
+        pass
+    
+    # Verificar si el login fue exitoso
+    try:
+        # Buscar elementos que indiquen que estamos logueados
+        elementos_logout = driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign Out') or contains(text(), 'Logout')]")
+        if elementos_logout:
+            print("✅ Confirmado: Usuario logueado correctamente")
+        else:
+            print("⚠️ No se pudo confirmar el login, pero continuando...")
+    except:
+        pass
+    
+    # Recargar la página para asegurar que todos los elementos estén actualizados
+    print("Recargando página...")
+    driver.refresh()
+    time.sleep(5)
+    
+    print("✅ Página preparada para scraping")
+
 except Exception as e:
     print(f"Error en el proceso de login: {str(e)}")
     try:
@@ -491,44 +550,125 @@ wait = WebDriverWait(driver,10)
 # =========================
 
 def page_not_found(driver):
+    """Verifica si la página existe"""
     try:
-        driver.find_element(By.XPATH,'//div[contains(@class,"PriceWrap")]')
-        return False
-    except NoSuchElementException:
+        # Esperar a que la página cargue
+        time.sleep(2)
+        # Buscar indicadores de que la página existe
+        elementos = driver.find_elements(By.XPATH, '//div[contains(@class, "PriceWrap") or contains(@class, "__PriceWrap") or contains(@class, "price")]')
+        if elementos:
+            return False
+        # Si no hay elementos de precio, verificar si hay mensaje de error
+        mensaje_error = driver.find_elements(By.XPATH, '//*[contains(text(), "404") or contains(text(), "Not Found")]')
+        if mensaje_error:
+            return True
+        return True
+    except:
         return True
 
 def extract_price_data(driver, url):
-    driver.get(url)
-    time.sleep(3)
-
-    if page_not_found(driver):
-        return None, None
-    
-    container = WebDriverWait(driver,10).until(EC.presence_of_element_located((By.XPATH,'//div[contains(@class,"__PriceWrap")]')))
-
-    first_price = container.find_element(By.XPATH,'.//div[contains(@class,"avg")]').text
-
-    high = None
-    low = None
-
+    """Extrae datos de precio de una URL con manejo de errores mejorado"""
     try:
-        high = container.find_element(By.XPATH,'.//div[contains(@class,"list")]/div[1]/label[2]').text
-    except:
-        pass
-
-    try:
-        low = container.find_element(By.XPATH,'.//div[contains(@class,"list")]/div[2]/label[2]').text
-    except:
-        pass
-
-    time.sleep(3)
-
-    if low is not None and high is not None:
-        price_range = f"{low}-{high}"
-    else:
+        print(f"Extrayendo datos de: {url}")
+        driver.get(url)
+        time.sleep(3)
+        
+        # Esperar a que la página cargue
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "PriceWrap") or contains(@class, "__PriceWrap")]'))
+        )
+        
+        # Verificar si la página existe
+        if page_not_found(driver):
+            print(f"⚠️ Página no encontrada: {url}")
+            return None, None
+        
+        # Buscar el contenedor de precios con múltiples estrategias
+        container = None
+        try:
+            container = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, '//div[contains(@class, "__PriceWrap") or contains(@class, "PriceWrap")]'))
+            )
+        except:
+            # Intentar con otra clase
+            try:
+                container = driver.find_element(By.XPATH, '//div[contains(@class, "PriceWrap")]')
+            except:
+                # Intentar con cualquier contenedor que tenga precios
+                containers = driver.find_elements(By.XPATH, '//div[contains(@class, "price") or contains(@class, "Price")]')
+                for cont in containers:
+                    try:
+                        avg_elem = cont.find_element(By.XPATH, './/div[contains(@class, "avg") or contains(@class, "average")]')
+                        if avg_elem:
+                            container = cont
+                            break
+                    except:
+                        pass
+        
+        if not container:
+            print(f"⚠️ No se encontró contenedor de precios en: {url}")
+            # Guardar HTML para debug
+            with open(f'debug_price_{url.split("/")[-1]}.html', 'w', encoding='utf-8') as f:
+                f.write(driver.page_source)
+            return None, None
+        
+        # Extraer precio principal
+        first_price = None
+        try:
+            first_price = container.find_element(By.XPATH, './/div[contains(@class, "avg") or contains(@class, "average")]').text
+            print(f"✅ Precio encontrado: {first_price}")
+        except:
+            # Intentar con otro selector
+            try:
+                first_price = container.find_element(By.XPATH, './/div[contains(@class, "price")]').text
+            except:
+                print(f"⚠️ No se encontró precio principal en: {url}")
+        
+        # Extraer rango de precios
+        high = None
+        low = None
+        
+        try:
+            high = container.find_element(By.XPATH, './/div[contains(@class, "list")]/div[1]/label[2]').text
+        except:
+            pass
+        
+        try:
+            low = container.find_element(By.XPATH, './/div[contains(@class, "list")]/div[2]/label[2]').text
+        except:
+            pass
+        
+        # Si no se encontró con el selector específico, intentar con otro
+        if not high and not low:
+            try:
+                price_range_elements = container.find_elements(By.XPATH, './/div[contains(@class, "range") or contains(@class, "Range")]')
+                if price_range_elements:
+                    range_text = price_range_elements[0].text
+                    if '-' in range_text:
+                        parts = range_text.split('-')
+                        if len(parts) == 2:
+                            low = parts[0].strip()
+                            high = parts[1].strip()
+            except:
+                pass
+        
         price_range = None
-
-    return first_price, price_range
+        if low is not None and high is not None:
+            price_range = f"{low}-{high}"
+        elif first_price:
+            price_range = first_price
+        
+        print(f"✅ Datos extraídos: {first_price} - {price_range}")
+        return first_price, price_range
+        
+    except Exception as e:
+        print(f"❌ Error extrayendo datos de {url}: {str(e)}")
+        # Guardar screenshot para debug
+        try:
+            driver.save_screenshot(f"error_price_{url.split('/')[-1]}.png")
+        except:
+            pass
+        return None, None
 
 # =========================
 # LITHIUM CARBONATE
@@ -687,6 +827,24 @@ with pd.ExcelWriter(file_name, engine=engine) as writer:
             }
         )
 
+# ============================================
+# VERIFICACIÓN FINAL Y LIMPIEZA
+# ============================================
+print("\n--- Finalizando scraping ---")
+
+# Mostrar resumen de datos extraídos
+print("\n=== RESUMEN DE DATOS ===")
+print(f"Lithium Carbonate: {len(df_lithium_carbonate)} registros")
+print(f"Lithium Hydroxide: {len(df_lithium_hydroxide)} registros")
+print(f"Lithium Metal: {len(df_lithium_metal)} registros")
+print(f"Other Chemicals: {len(df_other)} registros")
+print(f"Rare Earth Oxides: {len(df_rare_earth)} registros")
+print("========================")
+
+# Verificar si hay datos vacíos
+if df_lithium_carbonate.empty and df_lithium_hydroxide.empty and df_lithium_metal.empty:
+    print("⚠️ ADVERTENCIA: No se extrajeron datos. Verificar el scraping.")
+    
 sender = os.environ["EMAIL_USER"]
 password = os.environ["EMAIL_PASS"]
 receiver = "market.intelligence@JGI.be"
