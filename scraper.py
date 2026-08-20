@@ -15,12 +15,11 @@ user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
 async def realizar_login_playwright():
-    """Realiza el login usando Playwright - Versión con JavaScript para llenar campos"""
+    """Realiza el login llenando los campos con JavaScript para React"""
     
     print("\n=== INICIANDO LOGIN CON PLAYWRIGHT ===")
     
     async with async_playwright() as p:
-        # Lanzar navegador en modo headless
         browser = await p.chromium.launch(
             headless=True,
             args=[
@@ -34,7 +33,6 @@ async def realizar_login_playwright():
             ]
         )
         
-        # Crear contexto
         context = await browser.new_context(
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             viewport={'width': 1920, 'height': 1080},
@@ -42,7 +40,6 @@ async def realizar_login_playwright():
             timezone_id='America/New_York'
         )
         
-        # Crear página
         page = await context.new_page()
         page.set_default_timeout(60000)
         
@@ -50,9 +47,8 @@ async def realizar_login_playwright():
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(3000)
         
-        # PASO 1: Hacer clic en Sign In con JavaScript
-        print("Buscando botón Sign In...")
-        
+        # PASO 1: Hacer clic en Sign In
+        print("Haciendo clic en Sign In...")
         await page.evaluate("""
             () => {
                 const buttons = document.querySelectorAll('button');
@@ -65,231 +61,206 @@ async def realizar_login_playwright():
                 return false;
             }
         """)
-        print("✅ Clic en Sign In (JavaScript)")
+        print("✅ Clic en Sign In")
         await page.wait_for_timeout(3000)
         
-        # PASO 2: Crear el popup manualmente si no existe (con los inputs correctos)
+        # PASO 2: Verificar que el popup esté visible
         print("Verificando popup...")
-        
-        await page.evaluate("""
+        popup_visible = await page.evaluate("""
             () => {
-                // Verificar si el popup existe
-                let popup = document.querySelector('#smm-auth-widget-root');
-                if (!popup) {
-                    console.log('Creando popup manualmente...');
-                    
-                    // Crear el contenedor del popup
-                    const container = document.createElement('div');
-                    container.id = 'smm-auth-widget-root';
-                    container.style.cssText = `
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        z-index: 99999;
-                        background: rgba(0,0,0,0.5);
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                    `;
-                    
-                    // Crear el modal
-                    const modal = document.createElement('div');
-                    modal.style.cssText = `
-                        background: white;
-                        padding: 40px;
-                        border-radius: 8px;
-                        width: 420px;
-                        max-width: 90%;
-                        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-                        position: relative;
-                    `;
-                    
-                    modal.innerHTML = `
-                        <button class="iconClose" style="position:absolute;top:10px;right:15px;background:none;border:none;font-size:24px;cursor:pointer;color:#999;">×</button>
-                        <h2 style="margin-top:0;text-align:center;color:#333;font-size:20px;">Welcome to SMM</h2>
-                        <div style="margin-bottom:15px;">
-                            <label style="display:block;margin-bottom:5px;color:#555;font-size:14px;">Email address or phone number</label>
-                            <input id="_r_0_" type="text" placeholder="Email or phone" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px;box-sizing:border-box;">
-                        </div>
-                        <div style="margin-bottom:20px;">
-                            <label style="display:block;margin-bottom:5px;color:#555;font-size:14px;">Password</label>
-                            <input id="_r_2_" type="password" placeholder="Password" style="width:100%;padding:10px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px;box-sizing:border-box;">
-                        </div>
-                        <div style="margin-bottom:15px;">
-                            <label style="color:#555;font-size:14px;">
-                                <input type="checkbox" style="margin-right:8px;"> Remember me
-                            </label>
-                        </div>
-                        <button id="login-submit" class="smm-auth-submit" style="width:100%;padding:12px;background:#d7000f;color:white;border:none;border-radius:4px;font-size:16px;font-weight:600;cursor:pointer;">Sign in</button>
-                        <div style="margin-top:15px;text-align:center;color:#555;font-size:14px;">
-                            Don't have an account? <a href="#" style="color:#d7000f;text-decoration:none;">Sign up</a>
-                        </div>
-                    `;
-                    
-                    container.appendChild(modal);
-                    document.body.appendChild(container);
-                    
-                    // Agregar evento para cerrar el popup
-                    const closeBtn = modal.querySelector('.iconClose');
-                    if (closeBtn) {
-                        closeBtn.addEventListener('click', () => {
-                            container.remove();
-                        });
+                const popup = document.querySelector('#smm-auth-widget-root');
+                if (!popup) return 'not_found';
+                // Verificar si está visible
+                const style = window.getComputedStyle(popup);
+                return style.display !== 'none' && style.visibility !== 'hidden' ? 'visible' : 'hidden';
+            }
+        """)
+        print(f"Popup: {popup_visible}")
+        
+        if popup_visible == 'hidden':
+            print("Forzando visibilidad del popup...")
+            await page.evaluate("""
+                () => {
+                    const popup = document.querySelector('#smm-auth-widget-root');
+                    if (popup) {
+                        popup.style.display = 'block';
+                        popup.style.visibility = 'visible';
+                        popup.style.opacity = '1';
                     }
-                    
-                    console.log('Popup creado manualmente');
                 }
-            }
-        """)
-        
-        await page.wait_for_timeout(2000)
-        
-        # PASO 3: LLENAR LOS CAMPOS CON JAVASCRIPT (NO con fill())
-        print("Llenando campos con JavaScript...")
-        
-        # Usar JavaScript para establecer los valores y disparar eventos
-        await page.evaluate(f"""
-            () => {{
-                function setReactValue(element, value) {{
-                    // Establecer el valor
-                    element.value = value;
-                    
-                    // Disparar eventos en el orden correcto para React
-                    element.dispatchEvent(new Event('focus', {{ bubbles: true }}));
-                    element.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    element.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                    element.dispatchEvent(new Event('blur', {{ bubbles: true }}));
-                    
-                    // También intentar con eventos adicionales
-                    const event = new Event('input', {{ bubbles: true }});
-                    const tracker = element._valueTracker;
-                    if (tracker) {{
-                        tracker.setValue(value);
-                    }}
-                    
-                    console.log('Valor establecido:', value);
-                }}
-                
-                // Buscar los inputs
-                const userInput = document.querySelector('#_r_0_');
-                const passInput = document.querySelector('#_r_2_');
-                
-                if (userInput && passInput) {{
-                    // Limpiar primero
-                    userInput.value = '';
-                    passInput.value = '';
-                    
-                    // Establecer valores
-                    setReactValue(userInput, '{user}');
-                    setReactValue(passInput, '{password}');
-                    
-                    console.log('Campos llenados exitosamente');
-                    
-                    // Verificar que se llenaron
-                    console.log('Usuario:', userInput.value);
-                    console.log('Contraseña:', passInput.value ? '****' : 'vacío');
-                    
-                    // Habilitar el botón
-                    const loginBtn = document.querySelector('#login-submit');
-                    if (loginBtn) {{
-                        loginBtn.disabled = false;
-                        loginBtn.removeAttribute('disabled');
-                        loginBtn.style.opacity = '1';
-                        loginBtn.style.cursor = 'pointer';
-                        console.log('Botón habilitado');
-                    }}
-                    
-                    return true;
-                }}
-                return false;
-            }}
-        """)
-        
-        print("✅ Campos llenados con JavaScript")
-        await page.wait_for_timeout(2000)
-        
-        # Tomar screenshot para verificar que los campos estén llenos
-        await page.screenshot(path="screenshot_verificar_campos_llenados.png")
-        print("📸 Screenshot: screenshot_verificar_campos_llenados.png")
-        
-        # PASO 4: Verificar que los campos se llenaron correctamente
-        campos_verificados = await page.evaluate("""
-            () => {
-                const userInput = document.querySelector('#_r_0_');
-                const passInput = document.querySelector('#_r_2_');
-                return {
-                    user_value: userInput ? userInput.value : 'no_encontrado',
-                    pass_value: passInput ? (passInput.value ? '****' : 'vacio') : 'no_encontrado'
-                };
-            }
-        """)
-        
-        print(f"Verificación de campos: {campos_verificados}")
-        
-        if campos_verificados.get('user_value') != user:
-            print("⚠️ El campo de usuario no se llenó correctamente. Intentando nuevamente...")
-            
-            # Intentar nuevamente con un enfoque diferente
-            await page.evaluate(f"""
-                () => {{
-                    const userInput = document.querySelector('#_r_0_');
-                    if (userInput) {{
-                        userInput.focus();
-                        userInput.value = '{user}';
-                        userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                        userInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                        console.log('Usuario re-llenado:', userInput.value);
-                    }}
-                }}
             """)
             await page.wait_for_timeout(1000)
         
-        # PASO 5: Enviar el login
+        # PASO 3: Llenar los campos con JavaScript como lo haría un usuario real
+        print("Llenando campos de login...")
+        
+        # Función que imita el comportamiento humano: focus, escribir, blur
+        llenar_campos = f"""
+            (function() {{
+                // Función para llenar un input como un usuario real
+                function llenarInput(element, value) {{
+                    if (!element) return false;
+                    
+                    // 1. Enfocar el elemento
+                    element.focus();
+                    element.dispatchEvent(new Event('focus', {{ bubbles: true }}));
+                    
+                    // 2. Seleccionar todo el texto
+                    element.select();
+                    
+                    // 3. Establecer el valor
+                    element.value = value;
+                    
+                    // 4. Disparar eventos de input en el orden correcto para React
+                    const events = ['input', 'change', 'blur'];
+                    for (let eventType of events) {{
+                        const event = new Event(eventType, {{ bubbles: true }});
+                        element.dispatchEvent(event);
+                    }}
+                    
+                    // 5. Disparar eventos específicos de React
+                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype, 'value'
+                    ).set;
+                    nativeInputValueSetter.call(element, value);
+                    element.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    
+                    console.log(`Valor establecido: ${{value}}`);
+                    return true;
+                }}
+                
+                // Buscar los campos
+                const userInput = document.querySelector('#_r_0_');
+                const passInput = document.querySelector('#_r_2_');
+                
+                if (!userInput || !passInput) {{
+                    console.log('Campos no encontrados');
+                    return {{ success: false, error: 'campos_no_encontrados' }};
+                }}
+                
+                // Llenar usuario
+                const userOk = llenarInput(userInput, '{user}');
+                
+                // Esperar un poco entre campos (como un usuario real)
+                const passOk = llenarInput(passInput, '{password}');
+                
+                // Verificar que se llenaron correctamente
+                const userValue = userInput.value;
+                const passValue = passInput.value;
+                
+                console.log(`Usuario: ${{userValue}}`);
+                console.log(`Contraseña: ${{passValue ? '****' : 'vacío'}}`);
+                
+                return {{
+                    success: userOk && passOk,
+                    user_value: userValue,
+                    pass_value: passValue ? '****' : 'vacio'
+                }};
+            }})();
+        """
+        
+        resultado_llenado = await page.evaluate(llenar_campos)
+        print(f"Resultado llenado: {resultado_llenado}")
+        
+        # PASO 4: Verificar que los campos se llenaron realmente
+        if resultado_llenado.get('user_value') != user:
+            print("⚠️ El campo de usuario no se llenó correctamente. Intentando método alternativo...")
+            
+            # Método alternativo: usar selector y fill con más eventos
+            await page.fill('#_r_0_', user)
+            await page.press('#_r_0_', 'Tab')
+            await page.fill('#_r_2_', password)
+            await page.press('#_r_2_', 'Tab')
+            
+            # Verificar nuevamente
+            verificacion = await page.evaluate("""
+                () => {
+                    const user = document.querySelector('#_r_0_');
+                    const pass = document.querySelector('#_r_2_');
+                    return {
+                        user_value: user ? user.value : 'no_encontrado',
+                        pass_value: pass ? (pass.value ? '****' : 'vacio') : 'no_encontrado'
+                    };
+                }
+            """)
+            print(f"Verificación después de método alternativo: {verificacion}")
+            
+            if verificacion.get('user_value') != user:
+                print("⚠️ El método alternativo también falló. Intentando con JavaScript puro nuevamente...")
+                await page.evaluate(f"""
+                    () => {{
+                        const userInput = document.querySelector('#_r_0_');
+                        const passInput = document.querySelector('#_r_2_');
+                        if (userInput) {{
+                            userInput.value = '{user}';
+                            userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            userInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        }}
+                        if (passInput) {{
+                            passInput.value = '{password}';
+                            passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            passInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        }}
+                    }}
+                """)
+                await page.wait_for_timeout(1000)
+        
+        # PASO 5: Tomar screenshot para verificar que los campos estén llenos
+        await page.screenshot(path="screenshot_campos_llenados_final.png")
+        print("📸 Screenshot: screenshot_campos_llenados_final.png")
+        
+        # PASO 6: Hacer clic en el botón de login
         print("Enviando login...")
         
-        login_result = await page.evaluate("""
+        # Verificar que el botón esté habilitado
+        await page.evaluate("""
             () => {
-                // Buscar el botón de login
-                let loginBtn = document.querySelector('#login-submit');
-                if (!loginBtn) {
-                    loginBtn = document.querySelector('button.smm-auth-submit');
+                const btn = document.querySelector('button.smm-auth-submit');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.removeAttribute('disabled');
                 }
-                
-                if (loginBtn) {
-                    // Habilitar el botón
-                    loginBtn.disabled = false;
-                    loginBtn.removeAttribute('disabled');
-                    
-                    // Hacer clic
-                    loginBtn.click();
-                    console.log('Login enviado');
-                    return 'login_sent';
-                }
-                return 'button_not_found';
             }
         """)
         
-        print(f"Resultado del login: {login_result}")
+        # Hacer clic con JavaScript
+        click_result = await page.evaluate("""
+            () => {
+                const btn = document.querySelector('button.smm-auth-submit');
+                if (btn) {
+                    btn.click();
+                    return 'clicked';
+                }
+                // Intentar con cualquier botón que tenga Sign In dentro del popup
+                const popup = document.querySelector('#smm-auth-widget-root');
+                if (popup) {
+                    const buttons = popup.querySelectorAll('button');
+                    for (let b of buttons) {
+                        if (b.textContent.includes('Sign In')) {
+                            b.click();
+                            return 'clicked_alt';
+                        }
+                    }
+                }
+                return 'not_found';
+            }
+        """)
+        
+        print(f"Resultado clic: {click_result}")
         await page.wait_for_timeout(5000)
         
-        # Tomar screenshot después del login
-        await page.screenshot(path="screenshot_despues_login.png")
-        print("📸 Screenshot: screenshot_despues_login.png")
-        
-        # PASO 6: Esperar procesamiento y verificar
+        # PASO 7: Esperar procesamiento
         print("Esperando procesamiento del login...")
         await page.wait_for_timeout(10000)
         
-        # PASO 7: Verificar login
+        # PASO 8: Verificar login
         print("Verificando login...")
         
         # Recargar la página principal
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(5000)
-        await page.screenshot(path="screenshot_post_login.png")
-        print("📸 Screenshot: screenshot_post_login.png")
+        await page.screenshot(path="screenshot_post_login_final.png")
+        print("📸 Screenshot: screenshot_post_login_final.png")
         
         # Verificar si hay elementos de usuario logueado
         page_content = await page.content()
@@ -297,8 +268,6 @@ async def realizar_login_playwright():
         if "Sign Out" in page_content or "Logout" in page_content:
             print("✅ LOGIN EXITOSO - Usuario autenticado")
         else:
-            print("⚠️ No se encontró 'Sign Out' en la página principal")
-            
             # Verificar cookies
             cookies = await context.cookies()
             session_cookie = None
@@ -314,7 +283,7 @@ async def realizar_login_playwright():
                 await browser.close()
                 return False
         
-        # PASO 8: Verificar acceso a datos
+        # PASO 9: Verificar acceso a datos
         print("\n=== VERIFICANDO ACCESO A DATOS ===")
         
         test_url = "https://www.metal.com/Lithium/201102250059"
@@ -325,17 +294,9 @@ async def realizar_login_playwright():
         
         if "Sign in to view" in page_content:
             print("❌ No se puede acceder a los datos - Pide autenticación")
-            
-            # Mostrar cookies para debug
-            print("\n=== COOKIES ===")
-            cookies = await context.cookies()
-            for cookie in cookies:
-                print(f"  {cookie.get('name')}: {cookie.get('value')[:50]}...")
-            
             await browser.close()
             return False
         
-        # Verificar si hay números (precios)
         numbers = re.findall(r'\d+[,.]?\d*', page_content)
         if len(numbers) > 10:
             print(f"✅ Se puede acceder a los datos ({len(numbers)} números encontrados)")
@@ -343,12 +304,10 @@ async def realizar_login_playwright():
             print("⚠️ La página no pide login pero hay pocos números")
         
         print("\n✅ Login verificado - Continuando con scraping...")
-        
-        # Devolver la página para scraping
         return page, browser, context
 
 # ============================================
-# FUNCIONES DE SCRAPING CON PLAYWRIGHT
+# FUNCIONES DE SCRAPING (sin cambios)
 # ============================================
 
 async def extract_price_data_playwright(page, url):
@@ -359,14 +318,12 @@ async def extract_price_data_playwright(page, url):
         await page.goto(url, wait_until="networkidle")
         await page.wait_for_timeout(5000)
         
-        # Verificar si la página pide login
         page_content = await page.content()
         
         if "Sign in to view" in page_content:
             print("  ❌ La página pide autenticación")
             return None, None
         
-        # Buscar el contenedor
         try:
             await page.wait_for_selector("div[class*='__PriceWrap']", timeout=10000)
             print("  ✅ Contenedor __PriceWrap encontrado")
@@ -378,7 +335,6 @@ async def extract_price_data_playwright(page, url):
                 print(f"  ❌ No se encontró contenedor: {e}")
                 return None, None
         
-        # Extraer precio promedio
         first_price = None
         try:
             avg_element = await page.query_selector("div[class*='avg']")
@@ -389,7 +345,6 @@ async def extract_price_data_playwright(page, url):
         except Exception as e:
             print(f"  ❌ Error extrayendo precio: {e}")
         
-        # Extraer rango
         high = None
         low = None
         
@@ -429,7 +384,6 @@ async def main():
     
     print("=== INICIANDO SCRAPER CON PLAYWRIGHT ===")
     
-    # Realizar login
     result = await realizar_login_playwright()
     
     if not result:
@@ -549,10 +503,8 @@ async def main():
         await page.goto("https://www.metal.com/Rare-Earth-Oxides", wait_until="networkidle")
         await page.wait_for_timeout(5000)
         
-        # Esperar a que la tabla cargue
         await page.wait_for_selector(".ant-table-content table", timeout=10000)
         
-        # Obtener HTML de la tabla
         table_html = await page.evaluate("""
             () => {
                 const table = document.querySelector('.ant-table-content table');
@@ -571,7 +523,7 @@ async def main():
             df_rare_earth = pd.DataFrame()
         
         # ============================================
-        # VERIFICAR QUE SE EXTRAJERON DATOS
+        # VERIFICAR DATOS
         # ============================================
         print("\n=== VERIFICANDO DATOS EXTRAÍDOS ===")
         
@@ -704,8 +656,5 @@ async def main():
         await browser.close()
         sys.exit(1)
 
-# ============================================
-# EJECUTAR
-# ============================================
 if __name__ == "__main__":
     asyncio.run(main())
