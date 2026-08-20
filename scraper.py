@@ -15,7 +15,7 @@ user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
 async def realizar_login_playwright():
-    """Realiza el login llenando los campos con JavaScript para React"""
+    """Realiza el login usando el botón real smm-auth-submit"""
     
     print("\n=== INICIANDO LOGIN CON PLAYWRIGHT ===")
     
@@ -64,61 +64,26 @@ async def realizar_login_playwright():
         print("✅ Clic en Sign In")
         await page.wait_for_timeout(3000)
         
-        # PASO 2: Verificar que el popup esté visible
-        print("Verificando popup...")
-        popup_visible = await page.evaluate("""
-            () => {
-                const popup = document.querySelector('#smm-auth-widget-root');
-                if (!popup) return 'not_found';
-                // Verificar si está visible
-                const style = window.getComputedStyle(popup);
-                return style.display !== 'none' && style.visibility !== 'hidden' ? 'visible' : 'hidden';
-            }
-        """)
-        print(f"Popup: {popup_visible}")
-        
-        if popup_visible == 'hidden':
-            print("Forzando visibilidad del popup...")
-            await page.evaluate("""
-                () => {
-                    const popup = document.querySelector('#smm-auth-widget-root');
-                    if (popup) {
-                        popup.style.display = 'block';
-                        popup.style.visibility = 'visible';
-                        popup.style.opacity = '1';
-                    }
-                }
-            """)
-            await page.wait_for_timeout(1000)
-        
-        # PASO 3: Llenar los campos con JavaScript como lo haría un usuario real
+        # PASO 2: Llenar los campos
         print("Llenando campos de login...")
         
-        # Función que imita el comportamiento humano: focus, escribir, blur
         llenar_campos = f"""
             (function() {{
-                // Función para llenar un input como un usuario real
                 function llenarInput(element, value) {{
                     if (!element) return false;
                     
-                    // 1. Enfocar el elemento
                     element.focus();
                     element.dispatchEvent(new Event('focus', {{ bubbles: true }}));
                     
-                    // 2. Seleccionar todo el texto
                     element.select();
-                    
-                    // 3. Establecer el valor
                     element.value = value;
                     
-                    // 4. Disparar eventos de input en el orden correcto para React
                     const events = ['input', 'change', 'blur'];
                     for (let eventType of events) {{
                         const event = new Event(eventType, {{ bubbles: true }});
                         element.dispatchEvent(event);
                     }}
                     
-                    // 5. Disparar eventos específicos de React
                     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
                         window.HTMLInputElement.prototype, 'value'
                     ).set;
@@ -129,32 +94,21 @@ async def realizar_login_playwright():
                     return true;
                 }}
                 
-                // Buscar los campos
                 const userInput = document.querySelector('#_r_0_');
                 const passInput = document.querySelector('#_r_2_');
                 
                 if (!userInput || !passInput) {{
                     console.log('Campos no encontrados');
-                    return {{ success: false, error: 'campos_no_encontrados' }};
+                    return {{ success: false }};
                 }}
                 
-                // Llenar usuario
                 const userOk = llenarInput(userInput, '{user}');
-                
-                // Esperar un poco entre campos (como un usuario real)
                 const passOk = llenarInput(passInput, '{password}');
-                
-                // Verificar que se llenaron correctamente
-                const userValue = userInput.value;
-                const passValue = passInput.value;
-                
-                console.log(`Usuario: ${{userValue}}`);
-                console.log(`Contraseña: ${{passValue ? '****' : 'vacío'}}`);
                 
                 return {{
                     success: userOk && passOk,
-                    user_value: userValue,
-                    pass_value: passValue ? '****' : 'vacio'
+                    user_value: userInput.value,
+                    pass_value: passInput.value ? '****' : 'vacio'
                 }};
             }})();
         """
@@ -162,105 +116,77 @@ async def realizar_login_playwright():
         resultado_llenado = await page.evaluate(llenar_campos)
         print(f"Resultado llenado: {resultado_llenado}")
         
-        # PASO 4: Verificar que los campos se llenaron realmente
-        if resultado_llenado.get('user_value') != user:
-            print("⚠️ El campo de usuario no se llenó correctamente. Intentando método alternativo...")
-            
-            # Método alternativo: usar selector y fill con más eventos
-            await page.fill('#_r_0_', user)
-            await page.press('#_r_0_', 'Tab')
-            await page.fill('#_r_2_', password)
-            await page.press('#_r_2_', 'Tab')
-            
-            # Verificar nuevamente
-            verificacion = await page.evaluate("""
-                () => {
-                    const user = document.querySelector('#_r_0_');
-                    const pass = document.querySelector('#_r_2_');
-                    return {
-                        user_value: user ? user.value : 'no_encontrado',
-                        pass_value: pass ? (pass.value ? '****' : 'vacio') : 'no_encontrado'
-                    };
-                }
-            """)
-            print(f"Verificación después de método alternativo: {verificacion}")
-            
-            if verificacion.get('user_value') != user:
-                print("⚠️ El método alternativo también falló. Intentando con JavaScript puro nuevamente...")
-                await page.evaluate(f"""
-                    () => {{
-                        const userInput = document.querySelector('#_r_0_');
-                        const passInput = document.querySelector('#_r_2_');
-                        if (userInput) {{
-                            userInput.value = '{user}';
-                            userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            userInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                        }}
-                        if (passInput) {{
-                            passInput.value = '{password}';
-                            passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            passInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                        }}
-                    }}
-                """)
-                await page.wait_for_timeout(1000)
+        if not resultado_llenado.get('success'):
+            print("❌ Error al llenar los campos")
+            await browser.close()
+            return False
         
-        # PASO 5: Tomar screenshot para verificar que los campos estén llenos
-        await page.screenshot(path="screenshot_campos_llenados_final.png")
-        print("📸 Screenshot: screenshot_campos_llenados_final.png")
+        # Tomar screenshot para verificar campos
+        await page.screenshot(path="screenshot_campos_llenados.png")
+        print("📸 Screenshot: screenshot_campos_llenados.png")
         
-        # PASO 6: Hacer clic en el botón de login
+        # PASO 3: ENVIAR EL LOGIN - FORZAR CLICK EN EL BOTÓN REAL
         print("Enviando login...")
         
-        # Verificar que el botón esté habilitado
-        await page.evaluate("""
-            () => {
-                const btn = document.querySelector('button.smm-auth-submit');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.removeAttribute('disabled');
-                }
-            }
-        """)
-        
-        # Hacer clic con JavaScript
+        # Buscar y hacer clic en el botón real smm-auth-submit
         click_result = await page.evaluate("""
             () => {
-                const btn = document.querySelector('button.smm-auth-submit');
-                if (btn) {
-                    btn.click();
-                    return 'clicked';
+                // Buscar el botón por su clase específica
+                const loginBtn = document.querySelector('button.smm-auth-submit');
+                if (!loginBtn) {
+                    console.log('Botón no encontrado');
+                    return 'button_not_found';
                 }
-                // Intentar con cualquier botón que tenga Sign In dentro del popup
-                const popup = document.querySelector('#smm-auth-widget-root');
-                if (popup) {
-                    const buttons = popup.querySelectorAll('button');
-                    for (let b of buttons) {
-                        if (b.textContent.includes('Sign In')) {
-                            b.click();
-                            return 'clicked_alt';
-                        }
-                    }
+                
+                console.log('Botón encontrado:', loginBtn);
+                
+                // Habilitar el botón (quitar disabled y aria-busy)
+                loginBtn.disabled = false;
+                loginBtn.removeAttribute('disabled');
+                loginBtn.removeAttribute('aria-busy');
+                
+                // Forzar el clic de varias formas
+                // 1. Evento click nativo
+                loginBtn.click();
+                console.log('click() ejecutado');
+                
+                // 2. Disparar evento de clic manualmente
+                const event = new MouseEvent('click', {
+                    view: window,
+                    bubbles: true,
+                    cancelable: true
+                });
+                loginBtn.dispatchEvent(event);
+                console.log('MouseEvent click disparado');
+                
+                // 3. Si el botón tiene un manejador de eventos en el atributo onclick
+                if (loginBtn.onclick) {
+                    loginBtn.onclick();
+                    console.log('onclick ejecutado');
                 }
-                return 'not_found';
+                
+                return 'click_sent';
             }
         """)
         
-        print(f"Resultado clic: {click_result}")
-        await page.wait_for_timeout(5000)
+        print(f"Resultado envío: {click_result}")
         
-        # PASO 7: Esperar procesamiento
+        # Esperar procesamiento
         print("Esperando procesamiento del login...")
         await page.wait_for_timeout(10000)
         
-        # PASO 8: Verificar login
+        # Tomar screenshot después del envío
+        await page.screenshot(path="screenshot_despues_envio.png")
+        print("📸 Screenshot: screenshot_despues_envio.png")
+        
+        # PASO 4: Verificar login
         print("Verificando login...")
         
         # Recargar la página principal
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(5000)
-        await page.screenshot(path="screenshot_post_login_final.png")
-        print("📸 Screenshot: screenshot_post_login_final.png")
+        await page.screenshot(path="screenshot_post_login.png")
+        print("📸 Screenshot: screenshot_post_login.png")
         
         # Verificar si hay elementos de usuario logueado
         page_content = await page.content()
@@ -283,7 +209,7 @@ async def realizar_login_playwright():
                 await browser.close()
                 return False
         
-        # PASO 9: Verificar acceso a datos
+        # PASO 5: Verificar acceso a datos
         print("\n=== VERIFICANDO ACCESO A DATOS ===")
         
         test_url = "https://www.metal.com/Lithium/201102250059"
