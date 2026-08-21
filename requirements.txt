@@ -2,5 +2,3 @@ pandas
 openpyxl
 xlsxwriter
 playwright==1.40.0
-requests
-beautifulsoup4
