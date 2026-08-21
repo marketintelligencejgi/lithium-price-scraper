@@ -209,38 +209,58 @@ async def realizar_login_playwright():
         await page.screenshot(path="screenshot_campos_llenados_final.png")
         print("📸 Screenshot: screenshot_campos_llenados_final.png")
         
-        # PASO 6: Hacer clic en el botón de login REAL
+                # PASO 6: Hacer clic en el botón de login REAL (dentro del Shadow DOM)
         print("Enviando login...")
         
-        # Buscar el botón específico
         click_result = await page.evaluate("""
             () => {
-                // Buscar el botón por su clase exacta
-                const loginBtn = document.querySelector('button.smm-auth-submit');
-                if (loginBtn) {
-                    // Habilitar el botón (quitar disabled y aria-busy)
-                    loginBtn.disabled = false;
-                    loginBtn.removeAttribute('disabled');
-                    loginBtn.removeAttribute('aria-busy');
-                    
-                    // Hacer clic con JavaScript (forzado)
-                    loginBtn.click();
-                    console.log('Botón clickeado con JavaScript');
-                    return 'clicked';
+                // Buscar el host del Shadow DOM
+                const host = document.querySelector('#smm-auth-widget-root');
+                if (!host) {
+                    console.log('Host no encontrado');
+                    return 'host_not_found';
                 }
-                return 'not_found';
+                
+                // Acceder al Shadow Root
+                const shadowRoot = host.shadowRoot;
+                if (!shadowRoot) {
+                    console.log('Shadow Root no encontrado');
+                    return 'shadow_root_not_found';
+                }
+                
+                // Buscar el botón dentro del Shadow DOM
+                const loginBtn = shadowRoot.querySelector('button.smm-auth-submit');
+                if (!loginBtn) {
+                    console.log('Botón no encontrado en Shadow DOM');
+                    return 'button_not_found';
+                }
+                
+                // Habilitar el botón (quitar disabled y aria-busy)
+                loginBtn.disabled = false;
+                loginBtn.removeAttribute('disabled');
+                loginBtn.removeAttribute('aria-busy');
+                
+                // Hacer clic con JavaScript
+                loginBtn.click();
+                console.log('Botón clickeado desde Shadow DOM');
+                return 'clicked';
             }
         """)
         
         print(f"Resultado clic: {click_result}")
         
-        # Si no se encontró, intentar con un selector alternativo
-        if click_result == 'not_found':
-            print("Intentando selector alternativo...")
+        # Si falla, intentar con un selector alternativo dentro del Shadow DOM
+        if click_result != 'clicked':
+            print("Intentando selector alternativo en Shadow DOM...")
             click_result = await page.evaluate("""
                 () => {
+                    const host = document.querySelector('#smm-auth-widget-root');
+                    if (!host) return 'host_not_found';
+                    const shadowRoot = host.shadowRoot;
+                    if (!shadowRoot) return 'shadow_root_not_found';
+                    
                     // Buscar cualquier botón con clase smm-auth-submit
-                    const btn = document.querySelector('.smm-auth-submit');
+                    const btn = shadowRoot.querySelector('.smm-auth-submit');
                     if (btn) {
                         btn.disabled = false;
                         btn.removeAttribute('disabled');
