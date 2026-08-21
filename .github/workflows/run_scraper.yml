@@ -24,20 +24,16 @@ jobs:
         run: |
           echo "Installing Python dependencies..."
           pip install --upgrade pip
-          pip install pandas openpyxl xlsxwriter playwright
-          pip install -r requirements.txt
-          playwright install chromium
-          playwright install-deps
+          pip install pandas openpyxl xlsxwriter playwright requests beautifulsoup4
 
-      - name: Install Playwright browsers
+      - name: Install Playwright browser
         run: |
-          echo "Installing Playwright browsers..."
-          playwright install chromium
-          playwright install-deps
+          echo "Installing Playwright browser..."
+          playwright install --with-deps chromium
 
       - name: Verify Playwright installation
         run: |
-          python -c "from playwright.sync_api import sync_playwright; print('✅ Playwright installed successfully')"
+          echo "✅ Playwright installed successfully"
           playwright --version
 
       - name: Run scraper with retry
@@ -84,15 +80,16 @@ jobs:
           path: Reporte_Diario.xlsx
           retention-days: 30
 
-      - name: Success log
-        run: echo "Scraper completed successfully"
-
-      - name: Upload screenshots
+      - name: Upload debug files
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-screenshots
+          name: debug-files
           path: |
-            screenshot_*.png
+            *.png
             *.html
+            *.log
           retention-days: 7
+
+      - name: Success log
+        run: echo "Scraper completed successfully"
