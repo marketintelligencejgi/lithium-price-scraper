@@ -209,70 +209,19 @@ async def realizar_login_playwright():
         await page.screenshot(path="screenshot_campos_llenados_final.png")
         print("📸 Screenshot: screenshot_campos_llenados_final.png")
         
-                # PASO 6: Hacer clic en el botón de login REAL (dentro del Shadow DOM)
-        print("Enviando login...")
+# PASO 6: Simular la tecla Enter en el campo de contraseña
+        print("Enviando login (simulando Enter)...")
         
-        click_result = await page.evaluate("""
-            () => {
-                // Buscar el host del Shadow DOM
-                const host = document.querySelector('#smm-auth-widget-root');
-                if (!host) {
-                    console.log('Host no encontrado');
-                    return 'host_not_found';
-                }
-                
-                // Acceder al Shadow Root
-                const shadowRoot = host.shadowRoot;
-                if (!shadowRoot) {
-                    console.log('Shadow Root no encontrado');
-                    return 'shadow_root_not_found';
-                }
-                
-                // Buscar el botón dentro del Shadow DOM
-                const loginBtn = shadowRoot.querySelector('button.smm-auth-submit');
-                if (!loginBtn) {
-                    console.log('Botón no encontrado en Shadow DOM');
-                    return 'button_not_found';
-                }
-                
-                // Habilitar el botón (quitar disabled y aria-busy)
-                loginBtn.disabled = false;
-                loginBtn.removeAttribute('disabled');
-                loginBtn.removeAttribute('aria-busy');
-                
-                // Hacer clic con JavaScript
-                loginBtn.click();
-                console.log('Botón clickeado desde Shadow DOM');
-                return 'clicked';
-            }
-        """)
+        # Enfocar el campo de contraseña y presionar Enter
+        try:
+            # Esperar un momento para asegurar que el campo esté listo
+            await page.wait_for_timeout(500)
+            await page.press('#_r_2_', 'Enter')
+            print("✅ Enter presionado en el campo de contraseña")
+        except Exception as e:
+            print(f"❌ Error al presionar Enter: {e}")
         
-        print(f"Resultado clic: {click_result}")
-        
-        # Si falla, intentar con un selector alternativo dentro del Shadow DOM
-        if click_result != 'clicked':
-            print("Intentando selector alternativo en Shadow DOM...")
-            click_result = await page.evaluate("""
-                () => {
-                    const host = document.querySelector('#smm-auth-widget-root');
-                    if (!host) return 'host_not_found';
-                    const shadowRoot = host.shadowRoot;
-                    if (!shadowRoot) return 'shadow_root_not_found';
-                    
-                    // Buscar cualquier botón con clase smm-auth-submit
-                    const btn = shadowRoot.querySelector('.smm-auth-submit');
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.removeAttribute('disabled');
-                        btn.click();
-                        return 'clicked_alt';
-                    }
-                    return 'not_found';
-                }
-            """)
-            print(f"Resultado clic alternativo: {click_result}")
-        
-        # Esperar un momento después del clic
+        # Esperar un momento después del Enter
         await page.wait_for_timeout(3000)
         
         # PASO 7: Esperar procesamiento
