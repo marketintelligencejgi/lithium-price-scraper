@@ -15,7 +15,7 @@ user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
 async def realizar_login_playwright():
-    """Realiza el login llenando los campos y presionando Enter en el campo de contraseña"""
+    """Realiza el login llenando los campos con JavaScript para React y presionando Enter"""
     
     print("\n=== INICIANDO LOGIN CON PLAYWRIGHT ===")
     
@@ -64,7 +64,7 @@ async def realizar_login_playwright():
         print("✅ Clic en Sign In")
         await page.wait_for_timeout(3000)
         
-        # PASO 2: Llenar campos con JavaScript (igual que antes)
+        # PASO 2: Llenar campos con JavaScript (misma técnica que funcionó)
         print("Llenando campos de login...")
         
         llenar_campos = f"""
@@ -74,6 +74,7 @@ async def realizar_login_playwright():
                     
                     element.focus();
                     element.dispatchEvent(new Event('focus', {{ bubbles: true }}));
+                    
                     element.select();
                     element.value = value;
                     
@@ -115,14 +116,7 @@ async def realizar_login_playwright():
         resultado_llenado = await page.evaluate(llenar_campos)
         print(f"Resultado llenado: {resultado_llenado}")
         
-        if not resultado_llenado.get('success'):
-            print("⚠️ Error al llenar los campos, pero continuamos...")
-        
-        # Tomar screenshot para verificar campos
-        await page.screenshot(path="screenshot_campos_llenados.png")
-        print("📸 Screenshot: screenshot_campos_llenados.png")
-        
-        # PASO 3: Simular la tecla Enter en el campo de contraseña
+        # PASO 3: Presionar Enter en el campo de contraseña (esto funcionó)
         print("Enviando login (simulando Enter)...")
         try:
             await page.press('#_r_2_', 'Enter')
@@ -130,71 +124,22 @@ async def realizar_login_playwright():
         except Exception as e:
             print(f"❌ Error al presionar Enter: {e}")
         
-        await page.wait_for_timeout(5000)
+        # Esperar a que el login se procese
+        print("Esperando procesamiento del login...")
+        await page.wait_for_timeout(8000)
         
-        # Tomar screenshot después del Enter
-        await page.screenshot(path="screenshot_despues_enter.png")
-        print("📸 Screenshot: screenshot_despues_enter.png")
-        
-        # PASO 4: Verificar login buscando el nombre de usuario "Market Intelligence"
-        print("Verificando login...")
-        
-        # Recargar la página principal para ver el estado
-        await page.goto("https://www.metal.com/", wait_until="networkidle")
-        await page.wait_for_timeout(5000)
+        # Tomar screenshot para verificar que el login fue exitoso (solo para debug)
         await page.screenshot(path="screenshot_post_login.png")
         print("📸 Screenshot: screenshot_post_login.png")
         
-        # Buscar el nombre de usuario "Market Intelligence" como indicador de login exitoso
-        page_content = await page.content()
-        if "Market Intelligence" in page_content:
-            print("✅ LOGIN EXITOSO - Usuario 'Market Intelligence' detectado")
-        else:
-            # Verificar cookies como fallback
-            cookies = await context.cookies()
-            session_cookie = None
-            for cookie in cookies:
-                if any(key in cookie.get('name', '').lower() for key in ['session', 'auth', 'token', 'sid']):
-                    session_cookie = cookie
-                    break
-            
-            if session_cookie:
-                print(f"✅ Cookie de sesión encontrada: {session_cookie.get('name')}")
-            else:
-                print("❌ No se encontró 'Market Intelligence' ni cookies de sesión")
-                await browser.close()
-                return False
-        
-        # PASO 5: Verificar acceso a datos (sin bloquear por "Sign in to view")
-        print("\n=== VERIFICANDO ACCESO A DATOS ===")
-        
-        test_url = "https://www.metal.com/Lithium/201102250059"
-        print(f"Navegando a {test_url} para verificar datos...")
-        await page.goto(test_url, wait_until="networkidle")
-        await page.wait_for_timeout(5000)
-        
-        # Tomar screenshot de la página de datos
-        await page.screenshot(path="screenshot_pagina_datos.png")
-        print("📸 Screenshot: screenshot_pagina_datos.png")
-        
-        page_content = await page.content()
-        
-        # YA NO BLOQUEAMOS POR "Sign in to view"
-        # Solo verificamos que haya números en la página (indicio de datos)
-        numbers = re.findall(r'\d+[,.]?\d*', page_content)
-        if len(numbers) > 10:
-            print(f"✅ Datos encontrados en la página de prueba ({len(numbers)} números)")
-        else:
-            print(f"⚠️ Pocos números en la página de prueba ({len(numbers)}). Puede que no haya datos, pero continuamos...")
-        
-        print("\n✅ Login verificado - Continuando con scraping...")
+        print("✅ Login completado - Continuando con scraping...")
         return page, browser, context
 
 # ============================================
-# FUNCIONES DE SCRAPING (sin cambios)
+# FUNCIONES DE SCRAPING
 # ============================================
 
-async def extract_price_data_playwright(page, url):
+async def extract_price_data_playwright(page, url, index=None):
     """Extrae datos de precio usando Playwright"""
     try:
         print(f"\n🔍 Extrayendo datos de: {url}")
@@ -202,18 +147,19 @@ async def extract_price_data_playwright(page, url):
         await page.goto(url, wait_until="networkidle")
         await page.wait_for_timeout(5000)
         
-        # Verificar si la página tiene datos (solo advertencia, no bloqueo)
-        page_content = await page.content()
-        if "Sign in to view" in page_content:
-            print("  ⚠️ La página muestra 'Sign in to view', pero puede ser un falso positivo")
+        # Tomar screenshot de cada página para debug
+        if index is not None:
+            await page.screenshot(path=f"screenshot_datos_{index}.png")
+            print(f"📸 Screenshot: screenshot_datos_{index}.png")
         
         # Buscar el contenedor
+        container = None
         try:
-            await page.wait_for_selector("div[class*='__PriceWrap']", timeout=10000)
+            container = await page.wait_for_selector("div[class*='__PriceWrap']", timeout=10000)
             print("  ✅ Contenedor __PriceWrap encontrado")
         except:
             try:
-                await page.wait_for_selector("div[class*='PriceWrap']", timeout=10000)
+                container = await page.wait_for_selector("div[class*='PriceWrap']", timeout=10000)
                 print("  ✅ Contenedor PriceWrap encontrado")
             except Exception as e:
                 print(f"  ❌ No se encontró contenedor: {e}")
@@ -222,7 +168,7 @@ async def extract_price_data_playwright(page, url):
         # Extraer precio promedio
         first_price = None
         try:
-            avg_element = await page.query_selector("div[class*='avg']")
+            avg_element = await container.query_selector("div[class*='avg']")
             if avg_element:
                 first_price = await avg_element.text_content()
                 first_price = first_price.strip() if first_price else None
@@ -235,7 +181,7 @@ async def extract_price_data_playwright(page, url):
         low = None
         
         try:
-            high_element = await page.query_selector("div[class*='list'] > div:nth-child(1) label:nth-child(2)")
+            high_element = await container.query_selector("div[class*='list'] > div:nth-child(1) label:nth-child(2)")
             if high_element:
                 high = await high_element.text_content()
                 high = high.strip() if high else None
@@ -244,7 +190,7 @@ async def extract_price_data_playwright(page, url):
             pass
         
         try:
-            low_element = await page.query_selector("div[class*='list'] > div:nth-child(2) label:nth-child(2)")
+            low_element = await container.query_selector("div[class*='list'] > div:nth-child(2) label:nth-child(2)")
             if low_element:
                 low = await low_element.text_content()
                 low = low.strip() if low else None
@@ -270,6 +216,7 @@ async def main():
     
     print("=== INICIANDO SCRAPER CON PLAYWRIGHT ===")
     
+    # Realizar login
     result = await realizar_login_playwright()
     
     if not result:
@@ -299,11 +246,11 @@ async def main():
         
         data_carbonate = []
         
-        for url in urls_carbonate:
-            price, range_price = await extract_price_data_playwright(page, url)
+        for i, url in enumerate(urls_carbonate, 1):
+            price, range_price = await extract_price_data_playwright(page, url, i)
             data_carbonate.append(price if price else "")
             data_carbonate.append(range_price if range_price else "")
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(2000)
         
         df_lithium_carbonate = pd.DataFrame([data_carbonate], columns=cols_carbonate)
         
@@ -330,11 +277,11 @@ async def main():
         
         data_hydroxide = []
         
-        for url in urls_hydroxide:
-            price, range_price = await extract_price_data_playwright(page, url)
+        for i, url in enumerate(urls_hydroxide, 1):
+            price, range_price = await extract_price_data_playwright(page, url, i)
             data_hydroxide.append(price if price else "")
             data_hydroxide.append(range_price if range_price else "")
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(2000)
         
         df_lithium_hydroxide = pd.DataFrame([data_hydroxide], columns=cols_hydroxide)
         
@@ -352,11 +299,11 @@ async def main():
         
         data_metal = []
         
-        for url in urls_metal:
-            price, range_price = await extract_price_data_playwright(page, url)
+        for i, url in enumerate(urls_metal, 1):
+            price, range_price = await extract_price_data_playwright(page, url, i)
             data_metal.append(price if price else "")
             data_metal.append(range_price if range_price else "")
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(2000)
         
         df_lithium_metal = pd.DataFrame([data_metal], columns=cols_metal)
         
@@ -374,11 +321,11 @@ async def main():
         
         data_other = []
         
-        for url in urls_other:
-            price, range_price = await extract_price_data_playwright(page, url)
+        for i, url in enumerate(urls_other, 1):
+            price, range_price = await extract_price_data_playwright(page, url, i)
             data_other.append(price if price else "")
             data_other.append(range_price if range_price else "")
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(2000)
         
         df_other = pd.DataFrame([data_other], columns=cols_other)
         
@@ -388,6 +335,9 @@ async def main():
         print("\n--- Extrayendo Rare Earth Oxides ---")
         await page.goto("https://www.metal.com/Rare-Earth-Oxides", wait_until="networkidle")
         await page.wait_for_timeout(5000)
+        
+        await page.screenshot(path="screenshot_reo.png")
+        print("📸 Screenshot: screenshot_reo.png")
         
         await page.wait_for_selector(".ant-table-content table", timeout=10000)
         
@@ -409,7 +359,7 @@ async def main():
             df_rare_earth = pd.DataFrame()
         
         # ============================================
-        # VERIFICAR DATOS
+        # VERIFICAR DATOS EXTRAÍDOS
         # ============================================
         print("\n=== VERIFICANDO DATOS EXTRAÍDOS ===")
         
