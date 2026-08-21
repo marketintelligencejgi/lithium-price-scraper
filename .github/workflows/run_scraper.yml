@@ -25,6 +25,9 @@ jobs:
           echo "Installing Python dependencies..."
           pip install --upgrade pip
           pip install pandas openpyxl xlsxwriter playwright
+          pip install -r requirements.txt
+          playwright install chromium
+          playwright install-deps
 
       - name: Install Playwright browsers
         run: |
