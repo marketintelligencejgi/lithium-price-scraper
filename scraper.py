@@ -9,15 +9,156 @@ from io import StringIO
 import re
 from datetime import datetime
 import sys
+import requests
+from bs4 import BeautifulSoup
 
 # Variables de entorno
 user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
-async def realizar_login_playwright():
-    """Realiza el login llenando los campos con JavaScript para React"""
+async def obtener_cookies_login():
+    """
+    Obtiene las cookies de autenticación usando requests
+    """
+    print("\n=== OBTENIENDO COOKIES CON REQUESTS ===")
     
-    print("\n=== INICIANDO LOGIN CON PLAYWRIGHT ===")
+    session = requests.Session()
+    
+    # Headers realistas
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1'
+    }
+    
+    # 1. Obtener la página principal
+    print("Obteniendo página principal...")
+    try:
+        response = session.get("https://www.metal.com/", headers=headers, timeout=15)
+        if response.status_code != 200:
+            print(f"❌ Error al obtener página principal: {response.status_code}")
+            return None
+        print("✅ Página principal obtenida")
+    except Exception as e:
+        print(f"❌ Error al obtener página principal: {e}")
+        return None
+    
+    # 2. Buscar token CSRF
+    soup = BeautifulSoup(response.text, 'html.parser')
+    csrf_token = None
+    token_input = soup.find('input', {'name': 'csrf_token'})
+    if token_input:
+        csrf_token = token_input.get('value')
+        print(f"✅ CSRF token encontrado: {csrf_token[:10]}...")
+    
+    # 3. Intentar diferentes endpoints de login
+    login_endpoints = [
+        "https://www.metal.com/api/login",
+        "https://www.metal.com/login",
+        "https://www.metal.com/auth/login",
+        "https://www.metal.com/account/login"
+    ]
+    
+    for endpoint in login_endpoints:
+        try:
+            print(f"Intentando login en: {endpoint}")
+            
+            # Probar diferentes formatos de datos
+            for data_format in [
+                {'username': user, 'password': password},
+                {'email': user, 'password': password},
+                {'login': user, 'password': password},
+                {'user': user, 'pass': password},
+                {'username': user, 'pass': password},
+                {'email': user, 'pass': password}
+            ]:
+                if csrf_token:
+                    data_format['csrf_token'] = csrf_token
+                    data_format['_csrf'] = csrf_token
+                
+                try:
+                    response = session.post(
+                        endpoint,
+                        data=data_format,
+                        headers={
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        allow_redirects=True,
+                        timeout=10
+                    )
+                    
+                    if response.status_code in [200, 302, 301]:
+                        print(f"✅ Login exitoso en {endpoint}")
+                        cookies = session.cookies.get_dict()
+                        if cookies:
+                            print(f"Cookies obtenidas: {len(cookies)}")
+                            for name, value in cookies.items():
+                                print(f"  {name}: {value[:20]}...")
+                            return cookies
+                except:
+                    continue
+        except Exception as e:
+            print(f"⚠️ Error con {endpoint}: {e}")
+    
+    # 4. Si no funcionó, probar con la página de login (aunque sea 404)
+    print("Intentando login a través de la página de login...")
+    try:
+        login_page_urls = [
+            "https://www.metal.com/login",
+            "https://www.metal.com/signin",
+            "https://www.metal.com/account/login"
+        ]
+        
+        for url in login_page_urls:
+            try:
+                response = session.get(url, headers=headers, allow_redirects=True)
+                if response.status_code == 200:
+                    print(f"✅ Página de login obtenida: {url}")
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    csrf_input = soup.find('input', {'name': 'csrf_token'})
+                    if csrf_input:
+                        csrf_token = csrf_input.get('value')
+                    
+                    login_data = {
+                        'username': user,
+                        'password': password,
+                        'csrf_token': csrf_token if csrf_token else ''
+                    }
+                    
+                    response = session.post(url, data=login_data, allow_redirects=True)
+                    if response.status_code in [200, 302]:
+                        cookies = session.cookies.get_dict()
+                        if cookies:
+                            print(f"✅ Cookies obtenidas desde {url}")
+                            return cookies
+            except:
+                continue
+    except Exception as e:
+        print(f"⚠️ Error con páginas de login: {e}")
+    
+    print("❌ No se pudo obtener cookies")
+    return None
+
+async def realizar_login_playwright():
+    """Realiza el login inyectando cookies de requests en Playwright"""
+    
+    print("\n=== INICIANDO LOGIN CON PLAYWRIGHT (COOKIES) ===")
+    
+    # Obtener cookies con requests
+    cookies_dict = await obtener_cookies_login()
+    
+    if not cookies_dict:
+        print("❌ No se obtuvieron cookies")
+        return False
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -35,260 +176,63 @@ async def realizar_login_playwright():
         
         context = await browser.new_context(
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            viewport={'width': 1920, 'height': 1080},
-            locale='en-US',
-            timezone_id='America/New_York'
+            viewport={'width': 1920, 'height': 1080}
         )
+        
+        # Inyectar cookies
+        print("Inyectando cookies en el navegador...")
+        for name, value in cookies_dict.items():
+            await context.add_cookies([{
+                'name': name,
+                'value': value,
+                'domain': '.metal.com',
+                'path': '/'
+            }])
+        print(f"✅ {len(cookies_dict)} cookies inyectadas")
         
         page = await context.new_page()
         page.set_default_timeout(60000)
         
-        print("Cargando página principal...")
+        print("Cargando página principal con cookies...")
         await page.goto("https://www.metal.com/", wait_until="networkidle")
         await page.wait_for_timeout(3000)
         
-        # PASO 1: Hacer clic en Sign In
-        print("Haciendo clic en Sign In...")
-        await page.evaluate("""
-            () => {
-                const buttons = document.querySelectorAll('button');
-                for (let btn of buttons) {
-                    if (btn.textContent.includes('Sign In')) {
-                        btn.click();
-                        return true;
-                    }
-                }
-                return false;
-            }
-        """)
-        print("✅ Clic en Sign In")
-        await page.wait_for_timeout(3000)
+        # Tomar screenshot
+        await page.screenshot(path="screenshot_con_cookies.png")
+        print("📸 Screenshot: screenshot_con_cookies.png")
         
-        # PASO 2: Verificar que el popup esté visible
-        print("Verificando popup...")
-        popup_visible = await page.evaluate("""
-            () => {
-                const popup = document.querySelector('#smm-auth-widget-root');
-                if (!popup) return 'not_found';
-                // Verificar si está visible
-                const style = window.getComputedStyle(popup);
-                return style.display !== 'none' && style.visibility !== 'hidden' ? 'visible' : 'hidden';
-            }
-        """)
-        print(f"Popup: {popup_visible}")
-        
-        if popup_visible == 'hidden':
-            print("Forzando visibilidad del popup...")
-            await page.evaluate("""
-                () => {
-                    const popup = document.querySelector('#smm-auth-widget-root');
-                    if (popup) {
-                        popup.style.display = 'block';
-                        popup.style.visibility = 'visible';
-                        popup.style.opacity = '1';
-                    }
-                }
-            """)
-            await page.wait_for_timeout(1000)
-        
-        # PASO 3: Llenar los campos con JavaScript como lo haría un usuario real
-        print("Llenando campos de login...")
-        
-        # Función que imita el comportamiento humano: focus, escribir, blur
-        llenar_campos = f"""
-            (function() {{
-                // Función para llenar un input como un usuario real
-                function llenarInput(element, value) {{
-                    if (!element) return false;
-                    
-                    // 1. Enfocar el elemento
-                    element.focus();
-                    element.dispatchEvent(new Event('focus', {{ bubbles: true }}));
-                    
-                    // 2. Seleccionar todo el texto
-                    element.select();
-                    
-                    // 3. Establecer el valor
-                    element.value = value;
-                    
-                    // 4. Disparar eventos de input en el orden correcto para React
-                    const events = ['input', 'change', 'blur'];
-                    for (let eventType of events) {{
-                        const event = new Event(eventType, {{ bubbles: true }});
-                        element.dispatchEvent(event);
-                    }}
-                    
-                    // 5. Disparar eventos específicos de React
-                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                        window.HTMLInputElement.prototype, 'value'
-                    ).set;
-                    nativeInputValueSetter.call(element, value);
-                    element.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    
-                    console.log(`Valor establecido: ${{value}}`);
-                    return true;
-                }}
-                
-                // Buscar los campos
-                const userInput = document.querySelector('#_r_0_');
-                const passInput = document.querySelector('#_r_2_');
-                
-                if (!userInput || !passInput) {{
-                    console.log('Campos no encontrados');
-                    return {{ success: false, error: 'campos_no_encontrados' }};
-                }}
-                
-                // Llenar usuario
-                const userOk = llenarInput(userInput, '{user}');
-                
-                // Esperar un poco entre campos (como un usuario real)
-                const passOk = llenarInput(passInput, '{password}');
-                
-                // Verificar que se llenaron correctamente
-                const userValue = userInput.value;
-                const passValue = passInput.value;
-                
-                console.log(`Usuario: ${{userValue}}`);
-                console.log(`Contraseña: ${{passValue ? '****' : 'vacío'}}`);
-                
-                return {{
-                    success: userOk && passOk,
-                    user_value: userValue,
-                    pass_value: passValue ? '****' : 'vacio'
-                }};
-            }})();
-        """
-        
-        resultado_llenado = await page.evaluate(llenar_campos)
-        print(f"Resultado llenado: {resultado_llenado}")
-        
-        # PASO 4: Verificar que los campos se llenaron realmente
-        if resultado_llenado.get('user_value') != user:
-            print("⚠️ El campo de usuario no se llenó correctamente. Intentando método alternativo...")
-            
-            # Método alternativo: usar selector y fill con más eventos
-            await page.fill('#_r_0_', user)
-            await page.press('#_r_0_', 'Tab')
-            await page.fill('#_r_2_', password)
-            await page.press('#_r_2_', 'Tab')
-            
-            # Verificar nuevamente
-            verificacion = await page.evaluate("""
-                () => {
-                    const user = document.querySelector('#_r_0_');
-                    const pass = document.querySelector('#_r_2_');
-                    return {
-                        user_value: user ? user.value : 'no_encontrado',
-                        pass_value: pass ? (pass.value ? '****' : 'vacio') : 'no_encontrado'
-                    };
-                }
-            """)
-            print(f"Verificación después de método alternativo: {verificacion}")
-            
-            if verificacion.get('user_value') != user:
-                print("⚠️ El método alternativo también falló. Intentando con JavaScript puro nuevamente...")
-                await page.evaluate(f"""
-                    () => {{
-                        const userInput = document.querySelector('#_r_0_');
-                        const passInput = document.querySelector('#_r_2_');
-                        if (userInput) {{
-                            userInput.value = '{user}';
-                            userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            userInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                        }}
-                        if (passInput) {{
-                            passInput.value = '{password}';
-                            passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            passInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                        }}
-                    }}
-                """)
-                await page.wait_for_timeout(1000)
-        
-        # PASO 5: Tomar screenshot para verificar que los campos estén llenos
-        await page.screenshot(path="screenshot_campos_llenados_final.png")
-        print("📸 Screenshot: screenshot_campos_llenados_final.png")
-        
-        # PASO 6: Hacer clic en el botón de login
-        print("Enviando login...")
-        
-        # Verificar que el botón esté habilitado
-        await page.evaluate("""
-            () => {
-                const btn = document.querySelector('button.smm-auth-submit');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.removeAttribute('disabled');
-                }
-            }
-        """)
-        
-        # Hacer clic con JavaScript
-        click_result = await page.evaluate("""
-            () => {
-                const btn = document.querySelector('button.smm-auth-submit');
-                if (btn) {
-                    btn.click();
-                    return 'clicked';
-                }
-                // Intentar con cualquier botón que tenga Sign In dentro del popup
-                const popup = document.querySelector('#smm-auth-widget-root');
-                if (popup) {
-                    const buttons = popup.querySelectorAll('button');
-                    for (let b of buttons) {
-                        if (b.textContent.includes('Sign In')) {
-                            b.click();
-                            return 'clicked_alt';
-                        }
-                    }
-                }
-                return 'not_found';
-            }
-        """)
-        
-        print(f"Resultado clic: {click_result}")
-        await page.wait_for_timeout(5000)
-        
-        # PASO 7: Esperar procesamiento
-        print("Esperando procesamiento del login...")
-        await page.wait_for_timeout(10000)
-        
-        # PASO 8: Verificar login
-        print("Verificando login...")
-        
-        # Recargar la página principal
-        await page.goto("https://www.metal.com/", wait_until="networkidle")
-        await page.wait_for_timeout(5000)
-        await page.screenshot(path="screenshot_post_login_final.png")
-        print("📸 Screenshot: screenshot_post_login_final.png")
-        
-        # Verificar si hay elementos de usuario logueado
+        # Verificar si el login fue exitoso
         page_content = await page.content()
         
         if "Sign Out" in page_content or "Logout" in page_content:
-            print("✅ LOGIN EXITOSO - Usuario autenticado")
+            print("✅ LOGIN EXITOSO - Usuario autenticado con cookies")
         else:
-            # Verificar cookies
+            print("⚠️ No se encontró 'Sign Out' en la página principal")
+            # Verificar cookies en el navegador
             cookies = await context.cookies()
+            print(f"Cookies en el navegador: {len(cookies)}")
+            for cookie in cookies:
+                print(f"  {cookie.get('name')}: {cookie.get('value')[:20]}...")
+            
             session_cookie = None
             for cookie in cookies:
                 if any(key in cookie.get('name', '').lower() for key in ['session', 'auth', 'token', 'sid']):
                     session_cookie = cookie
                     break
             
-            if session_cookie:
-                print(f"✅ Cookie de sesión encontrada: {session_cookie.get('name')}")
-            else:
+            if not session_cookie:
                 print("❌ No se encontraron cookies de sesión")
                 await browser.close()
                 return False
         
-        # PASO 9: Verificar acceso a datos
+        # Verificar acceso a datos
         print("\n=== VERIFICANDO ACCESO A DATOS ===")
         
         test_url = "https://www.metal.com/Lithium/201102250059"
         await page.goto(test_url, wait_until="networkidle")
         await page.wait_for_timeout(5000)
+        await page.screenshot(path="screenshot_precios_con_cookies.png")
+        print("📸 Screenshot: screenshot_precios_con_cookies.png")
         
         page_content = await page.content()
         
@@ -311,15 +255,12 @@ async def realizar_login_playwright():
 # ============================================
 
 async def extract_price_data_playwright(page, url):
-    """Extrae datos de precio usando Playwright"""
     try:
         print(f"\n🔍 Extrayendo datos de: {url}")
-        
         await page.goto(url, wait_until="networkidle")
         await page.wait_for_timeout(5000)
         
         page_content = await page.content()
-        
         if "Sign in to view" in page_content:
             print("  ❌ La página pide autenticación")
             return None, None
@@ -347,7 +288,6 @@ async def extract_price_data_playwright(page, url):
         
         high = None
         low = None
-        
         try:
             high_element = await page.query_selector("div[class*='list'] > div:nth-child(1) label:nth-child(2)")
             if high_element:
@@ -380,9 +320,7 @@ async def extract_price_data_playwright(page, url):
         return None, None
 
 async def main():
-    """Función principal"""
-    
-    print("=== INICIANDO SCRAPER CON PLAYWRIGHT ===")
+    print("=== INICIANDO SCRAPER CON PLAYWRIGHT (COOKIES) ===")
     
     result = await realizar_login_playwright()
     
@@ -412,7 +350,6 @@ async def main():
                           "Industrial-Grade Lithium Carbonate Price Range"]
         
         data_carbonate = []
-        
         for url in urls_carbonate:
             price, range_price = await extract_price_data_playwright(page, url)
             data_carbonate.append(price if price else "")
@@ -443,7 +380,6 @@ async def main():
                           "Industrial-Grade Lithium Hydroxide Price Range"]
         
         data_hydroxide = []
-        
         for url in urls_hydroxide:
             price, range_price = await extract_price_data_playwright(page, url)
             data_hydroxide.append(price if price else "")
@@ -465,7 +401,6 @@ async def main():
                       "Battery-Grade Lithium Metal (Weekly) Price Range"]
         
         data_metal = []
-        
         for url in urls_metal:
             price, range_price = await extract_price_data_playwright(page, url)
             data_metal.append(price if price else "")
@@ -487,7 +422,6 @@ async def main():
                       "Battery-Grade Lithium Fluoride Price Range"]
         
         data_other = []
-        
         for url in urls_other:
             price, range_price = await extract_price_data_playwright(page, url)
             data_other.append(price if price else "")
