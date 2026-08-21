@@ -15,7 +15,7 @@ user = os.environ["METAL_USER"]
 password = os.environ["METAL_PASS"]
 
 async def realizar_login_playwright():
-    """Realiza el login llenando los campos y presionando Enter en contraseña"""
+    """Realiza el login usando el popup real y simula Enter en el campo de contraseña"""
     
     print("\n=== INICIANDO LOGIN CON PLAYWRIGHT ===")
     
@@ -64,33 +64,21 @@ async def realizar_login_playwright():
         print("✅ Clic en Sign In")
         await page.wait_for_timeout(3000)
         
-        # PASO 2: Verificar que el popup esté visible
+        # PASO 2: Forzar la visibilidad del popup (si está oculto)
         print("Verificando popup...")
-        popup_visible = await page.evaluate("""
+        await page.evaluate("""
             () => {
                 const popup = document.querySelector('#smm-auth-widget-root');
-                if (!popup) return 'not_found';
-                const style = window.getComputedStyle(popup);
-                return style.display !== 'none' && style.visibility !== 'hidden' ? 'visible' : 'hidden';
+                if (popup) {
+                    popup.style.display = 'block';
+                    popup.style.visibility = 'visible';
+                    popup.style.opacity = '1';
+                }
             }
         """)
-        print(f"Popup: {popup_visible}")
+        await page.wait_for_timeout(1000)
         
-        if popup_visible == 'hidden':
-            print("Forzando visibilidad del popup...")
-            await page.evaluate("""
-                () => {
-                    const popup = document.querySelector('#smm-auth-widget-root');
-                    if (popup) {
-                        popup.style.display = 'block';
-                        popup.style.visibility = 'visible';
-                        popup.style.opacity = '1';
-                    }
-                }
-            """)
-            await page.wait_for_timeout(1000)
-        
-        # PASO 3: Llenar los campos con JavaScript como lo haría un usuario real
+        # PASO 3: Llenar los campos con JavaScript
         print("Llenando campos de login...")
         
         llenar_campos = f"""
@@ -131,16 +119,10 @@ async def realizar_login_playwright():
                 const userOk = llenarInput(userInput, '{user}');
                 const passOk = llenarInput(passInput, '{password}');
                 
-                const userValue = userInput.value;
-                const passValue = passInput.value;
-                
-                console.log(`Usuario: ${{userValue}}`);
-                console.log(`Contraseña: ${{passValue ? '****' : 'vacío'}}`);
-                
                 return {{
                     success: userOk && passOk,
-                    user_value: userValue,
-                    pass_value: passValue ? '****' : 'vacio'
+                    user_value: userInput.value,
+                    pass_value: passInput.value ? '****' : 'vacio'
                 }};
             }})();
         """
@@ -148,46 +130,13 @@ async def realizar_login_playwright():
         resultado_llenado = await page.evaluate(llenar_campos)
         print(f"Resultado llenado: {resultado_llenado}")
         
-        if resultado_llenado.get('user_value') != user:
-            print("⚠️ El campo de usuario no se llenó correctamente. Intentando método alternativo...")
+        if not resultado_llenado.get('success'):
+            print("⚠️ No se pudieron llenar los campos correctamente. Intentando método alternativo...")
             await page.fill('#_r_0_', user)
-            await page.press('#_r_0_', 'Tab')
             await page.fill('#_r_2_', password)
-            await page.press('#_r_2_', 'Tab')
-            
-            verificacion = await page.evaluate("""
-                () => {
-                    const user = document.querySelector('#_r_0_');
-                    const pass = document.querySelector('#_r_2_');
-                    return {
-                        user_value: user ? user.value : 'no_encontrado',
-                        pass_value: pass ? (pass.value ? '****' : 'vacio') : 'no_encontrado'
-                    };
-                }
-            """)
-            print(f"Verificación después de método alternativo: {verificacion}")
-            
-            if verificacion.get('user_value') != user:
-                print("⚠️ El método alternativo también falló. Intentando con JavaScript puro nuevamente...")
-                await page.evaluate(f"""
-                    () => {{
-                        const userInput = document.querySelector('#_r_0_');
-                        const passInput = document.querySelector('#_r_2_');
-                        if (userInput) {{
-                            userInput.value = '{user}';
-                            userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            userInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                        }}
-                        if (passInput) {{
-                            passInput.value = '{password}';
-                            passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                            passInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                        }}
-                    }}
-                """)
-                await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(1000)
         
-        # Tomar screenshot para verificar que los campos estén llenos
+        # Tomar screenshot para verificar campos
         await page.screenshot(path="screenshot_campos_llenados_final.png")
         print("📸 Screenshot: screenshot_campos_llenados_final.png")
         
@@ -200,30 +149,29 @@ async def realizar_login_playwright():
         except Exception as e:
             print(f"❌ Error al presionar Enter: {e}")
         
-        # Esperar a que el login se procese
+        await page.wait_for_timeout(3000)
+        
+        # Tomar screenshot después del envío
+        await page.screenshot(path="screenshot_despues_envio.png")
+        print("📸 Screenshot: screenshot_despues_envio.png")
+        
+        # PASO 5: Esperar procesamiento
         print("Esperando procesamiento del login...")
         await page.wait_for_timeout(10000)
         
-        # Tomar screenshot después del login
+        # PASO 6: Verificar login en la página principal
+        print("Verificando login...")
+        
+        await page.goto("https://www.metal.com/", wait_until="networkidle")
+        await page.wait_for_timeout(5000)
         await page.screenshot(path="screenshot_post_login.png")
         print("📸 Screenshot: screenshot_post_login.png")
         
-        # PASO 5: Verificar login
-        print("Verificando login...")
-        
-        # Recargar la página principal
-        await page.goto("https://www.metal.com/", wait_until="networkidle")
-        await page.wait_for_timeout(5000)
-        await page.screenshot(path="screenshot_post_login_final.png")
-        print("📸 Screenshot: screenshot_post_login_final.png")
-        
-        # Verificar si hay elementos de usuario logueado
         page_content = await page.content()
         
         if "Sign Out" in page_content or "Logout" in page_content:
             print("✅ LOGIN EXITOSO - Usuario autenticado")
         else:
-            print("⚠️ No se encontró 'Sign Out' en la página principal")
             cookies = await context.cookies()
             session_cookie = None
             for cookie in cookies:
@@ -238,7 +186,7 @@ async def realizar_login_playwright():
                 await browser.close()
                 return False
         
-        # PASO 6: Verificar acceso a datos
+        # PASO 7: Verificar acceso a datos - MEJORADO
         print("\n=== VERIFICANDO ACCESO A DATOS ===")
         
         test_url = "https://www.metal.com/Lithium/201102250059"
@@ -250,29 +198,33 @@ async def realizar_login_playwright():
         await page.screenshot(path="screenshot_pagina_datos.png")
         print("📸 Screenshot: screenshot_pagina_datos.png")
         
-        page_content = await page.content()
-        
-        # Verificar si la página pide autenticación
-        if "Sign in to view" in page_content:
-            print("❌ La página pide autenticación - Login no exitoso")
-            await browser.close()
-            return False
-        
-        # Verificar que hay datos (precios)
-        # Buscar elementos de precio en lugar de contar números
-        try:
-            # Esperar a que aparezca algún elemento de precio
-            await page.wait_for_selector("div[class*='__PriceWrap'], div[class*='PriceWrap']", timeout=10000)
-            print("✅ Elementos de precio encontrados")
-        except:
-            print("⚠️ No se encontraron elementos de precio, pero podría haber datos de otra forma")
-        
-        # Verificar que hay números (como respaldo)
-        numbers = re.findall(r'\d+[,.]?\d*', page_content)
-        if len(numbers) > 5:
-            print(f"✅ Se encontraron {len(numbers)} números en la página - Datos disponibles")
+        # Verificar si hay elementos de precio REALES
+        # Buscar el contenedor de precios
+        price_container = await page.query_selector("div[class*='__PriceWrap']")
+        if price_container:
+            print("✅ Contenedor de precios encontrado - Datos disponibles")
         else:
-            print(f"⚠️ Solo se encontraron {len(numbers)} números, pero continuando...")
+            # Intentar con otro selector
+            price_container = await page.query_selector("div[class*='PriceWrap']")
+            if price_container:
+                print("✅ Contenedor de precios encontrado (alternativo) - Datos disponibles")
+            else:
+                # Si no hay contenedor, verificar si hay texto de "Sign in to view"
+                page_content = await page.content()
+                if "Sign in to view" in page_content:
+                    print("❌ La página pide autenticación - Login no exitoso")
+                    await browser.close()
+                    return False
+                else:
+                    # Si no hay contenedor pero tampoco pide login, puede ser que la página tenga otro formato
+                    # Intentar buscar cualquier elemento con números (precios)
+                    numbers = re.findall(r'\d+[,.]?\d*', page_content)
+                    if len(numbers) > 10:
+                        print(f"✅ Se encontraron {len(numbers)} números en la página - Datos disponibles")
+                    else:
+                        print("⚠️ No se encontraron datos de precios en la página")
+                        await browser.close()
+                        return False
         
         print("\n✅ Login verificado - Continuando con scraping...")
         return page, browser, context
@@ -289,19 +241,12 @@ async def extract_price_data_playwright(page, url):
         await page.goto(url, wait_until="networkidle")
         await page.wait_for_timeout(5000)
         
-        # Tomar screenshot de cada página de datos (para debug)
-        nombre_archivo = f"screenshot_datos_{url.split('/')[-1]}.png"
-        await page.screenshot(path=nombre_archivo)
-        print(f"📸 Screenshot: {nombre_archivo}")
-        
         page_content = await page.content()
         
-        # Verificar si la página pide login
         if "Sign in to view" in page_content:
             print("  ❌ La página pide autenticación")
             return None, None
         
-        # Buscar el contenedor
         try:
             await page.wait_for_selector("div[class*='__PriceWrap']", timeout=10000)
             print("  ✅ Contenedor __PriceWrap encontrado")
@@ -313,7 +258,6 @@ async def extract_price_data_playwright(page, url):
                 print(f"  ❌ No se encontró contenedor: {e}")
                 return None, None
         
-        # Extraer precio promedio
         first_price = None
         try:
             avg_element = await page.query_selector("div[class*='avg']")
@@ -324,7 +268,6 @@ async def extract_price_data_playwright(page, url):
         except Exception as e:
             print(f"  ❌ Error extrayendo precio: {e}")
         
-        # Extraer rango
         high = None
         low = None
         
