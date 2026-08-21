@@ -1,7 +1,6 @@
-selenium
-webdriver-manager
 pandas
-xlsxwriter
 openpyxl
-lxml
+xlsxwriter
 playwright==1.40.0
+requests
+beautifulsoup4
