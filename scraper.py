@@ -232,7 +232,6 @@ async def extract_price_data_playwright(page, url, index=None):
     try:
         print(f"\n🔍 Extrayendo datos de: {url}")
         
-        await page.goto(url, wait_until="networkidle")
         await page.wait_for_timeout(5000)
         
         # Tomar screenshot de cada página para debug
