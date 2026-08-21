@@ -64,7 +64,33 @@ async def realizar_login_playwright():
         print("✅ Clic en Sign In")
         await page.wait_for_timeout(3000)
         
-        # PASO 2: Llenar campos con JavaScript (misma técnica que funcionó)
+        # PASO 2: Verificar que el popup esté visible
+        print("Verificando popup...")
+        popup_visible = await page.evaluate("""
+            () => {
+                const popup = document.querySelector('#smm-auth-widget-root');
+                if (!popup) return 'not_found';
+                const style = window.getComputedStyle(popup);
+                return style.display !== 'none' && style.visibility !== 'hidden' ? 'visible' : 'hidden';
+            }
+        """)
+        print(f"Popup: {popup_visible}")
+        
+        if popup_visible == 'hidden':
+            print("Forzando visibilidad del popup...")
+            await page.evaluate("""
+                () => {
+                    const popup = document.querySelector('#smm-auth-widget-root');
+                    if (popup) {
+                        popup.style.display = 'block';
+                        popup.style.visibility = 'visible';
+                        popup.style.opacity = '1';
+                    }
+                }
+            """)
+            await page.wait_for_timeout(1000)
+        
+        # PASO 3: Llenar los campos con JavaScript como lo haría un usuario real
         print("Llenando campos de login...")
         
         llenar_campos = f"""
@@ -105,10 +131,16 @@ async def realizar_login_playwright():
                 const userOk = llenarInput(userInput, '{user}');
                 const passOk = llenarInput(passInput, '{password}');
                 
+                const userValue = userInput.value;
+                const passValue = passInput.value;
+                
+                console.log(`Usuario: ${{userValue}}`);
+                console.log(`Contraseña: ${{passValue ? '****' : 'vacío'}}`);
+                
                 return {{
                     success: userOk && passOk,
-                    user_value: userInput.value,
-                    pass_value: passInput.value ? '****' : 'vacio'
+                    user_value: userValue,
+                    pass_value: passValue ? '****' : 'vacio'
                 }};
             }})();
         """
@@ -116,27 +148,83 @@ async def realizar_login_playwright():
         resultado_llenado = await page.evaluate(llenar_campos)
         print(f"Resultado llenado: {resultado_llenado}")
         
-        # PASO 3: Presionar Enter en el campo de contraseña (esto funcionó)
+        # PASO 4: Verificar que los campos se llenaron realmente
+        if resultado_llenado.get('user_value') != user:
+            print("⚠️ El campo de usuario no se llenó correctamente. Intentando método alternativo...")
+            
+            await page.fill('#_r_0_', user)
+            await page.press('#_r_0_', 'Tab')
+            await page.fill('#_r_2_', password)
+            await page.press('#_r_2_', 'Tab')
+            
+            verificacion = await page.evaluate("""
+                () => {
+                    const user = document.querySelector('#_r_0_');
+                    const pass = document.querySelector('#_r_2_');
+                    return {
+                        user_value: user ? user.value : 'no_encontrado',
+                        pass_value: pass ? (pass.value ? '****' : 'vacio') : 'no_encontrado'
+                    };
+                }
+            """)
+            print(f"Verificación después de método alternativo: {verificacion}")
+            
+            if verificacion.get('user_value') != user:
+                print("⚠️ El método alternativo también falló. Intentando con JavaScript puro nuevamente...")
+                await page.evaluate(f"""
+                    () => {{
+                        const userInput = document.querySelector('#_r_0_');
+                        const passInput = document.querySelector('#_r_2_');
+                        if (userInput) {{
+                            userInput.value = '{user}';
+                            userInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            userInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        }}
+                        if (passInput) {{
+                            passInput.value = '{password}';
+                            passInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            passInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        }}
+                    }}
+                """)
+                await page.wait_for_timeout(1000)
+        
+        # PASO 5: Tomar screenshot para verificar que los campos estén llenos
+        await page.screenshot(path="screenshot_campos_llenados_final.png")
+        print("📸 Screenshot: screenshot_campos_llenados_final.png")
+        
+        # PASO 6: Simular la tecla Enter en el campo de contraseña
         print("Enviando login (simulando Enter)...")
+        
         try:
+            await page.wait_for_timeout(500)
             await page.press('#_r_2_', 'Enter')
             print("✅ Enter presionado en el campo de contraseña")
         except Exception as e:
             print(f"❌ Error al presionar Enter: {e}")
         
-        # Esperar a que el login se procese
+        await page.wait_for_timeout(3000)
+        
+        # PASO 7: Esperar procesamiento
         print("Esperando procesamiento del login...")
-        await page.wait_for_timeout(8000)
+        await page.wait_for_timeout(10000)
         
-        # Tomar screenshot para verificar que el login fue exitoso (solo para debug)
-        await page.screenshot(path="screenshot_post_login.png")
-        print("📸 Screenshot: screenshot_post_login.png")
+        # PASO 8: Recargar la página principal y continuar (sin verificaciones)
+        print("Recargando página principal...")
+        await page.goto("https://www.metal.com/", wait_until="networkidle")
+        await page.wait_for_timeout(5000)
+        await page.screenshot(path="screenshot_post_login_final.png")
+        print("📸 Screenshot: screenshot_post_login_final.png")
         
-        print("✅ Login completado - Continuando con scraping...")
+        # ELIMINADO: Verificación de "Sign Out" o cookies
+        # ELIMINADO: Navegación a URL de prueba para verificar datos
+        # ELIMINADO: Búsqueda de "Sign in to view" o números
+        
+        print("\n✅ Login completado - Iniciando scraping directamente...")
         return page, browser, context
 
 # ============================================
-# FUNCIONES DE SCRAPING
+# FUNCIONES DE SCRAPING (con advertencias, sin bloqueos)
 # ============================================
 
 async def extract_price_data_playwright(page, url, index=None):
@@ -152,7 +240,7 @@ async def extract_price_data_playwright(page, url, index=None):
             await page.screenshot(path=f"screenshot_datos_{index}.png")
             print(f"📸 Screenshot: screenshot_datos_{index}.png")
         
-        # Buscar el contenedor
+        # Buscar el contenedor (ya no verificamos "Sign in to view")
         container = None
         try:
             container = await page.wait_for_selector("div[class*='__PriceWrap']", timeout=10000)
@@ -359,7 +447,7 @@ async def main():
             df_rare_earth = pd.DataFrame()
         
         # ============================================
-        # VERIFICAR DATOS EXTRAÍDOS
+        # VERIFICAR DATOS EXTRAÍDOS (solo para saber si el scraping funcionó)
         # ============================================
         print("\n=== VERIFICANDO DATOS EXTRAÍDOS ===")
         
