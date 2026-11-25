@@ -2,7 +2,7 @@ name: Metal Scraper
 
 on:
   schedule:
-    - cron: '20 2 * * *'   # 00:20 Colombia
+    - cron: '30 2 * * *'   # 00:20 Colombia
   workflow_dispatch:
 
 jobs:
